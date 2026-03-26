@@ -61,29 +61,20 @@ export class BotAI {
     const totalCells = this.grid.getTotalCells();
     const myPercent = totalCells > 0 ? (scan.myCellCount / totalCells) * 100 : 0;
 
-    // Check immediate threats — enemy light close to our territory
-    const closeThreat = scan.nearbyEnemies
-      .filter(e => e.dist < this.bot.lightRadius * 1.5)
-      .sort((a, b) => a.dist - b.dist)[0];
-
-    if (closeThreat && myPercent > 5) {
-      this.state = 'DEFEND';
-      this.pickDefendTarget(scan, offsetX, offsetY);
-      this.stateTimer = 0;
-      return;
-    }
-
     // Strategic obstacle placement — cast shadows on enemy territory
     this.tryStrategicObstacle(scan, offsetX, offsetY);
 
-    // State transitions
+    // State transitions — prioritize EXPAND and ATTACK, rarely DEFEND
     switch (this.state) {
       case 'EXPAND':
-        if (myPercent > 25 && scan.enemyCells.length > 0 && this.stateTimer > 3000) {
+        // Attack enemy territory if we're big enough and enemies are nearby
+        if (myPercent > 15 && scan.enemyCells.length > 3 && this.stateTimer > 4000) {
           this.state = 'ATTACK';
           this.stateTimer = 0;
-        } else if (this.stateTimer > 5000) {
-          this.state = Math.random() < 0.3 ? 'CLEANSE' : 'EXPAND';
+        }
+        // If an enemy is literally ON our territory (not just nearby), defend briefly
+        else if (this.stateTimer > 6000 && this.isEnemyOnMyTerritory(scan)) {
+          this.state = 'DEFEND';
           this.stateTimer = 0;
         }
         break;
@@ -93,11 +84,17 @@ export class BotAI {
           this.state = 'EXPAND';
           this.stateTimer = 0;
         }
+        // Switch to defend only if enemy is eating our cells right now
+        if (this.stateTimer > 3000 && this.isEnemyOnMyTerritory(scan)) {
+          this.state = 'DEFEND';
+          this.stateTimer = 0;
+        }
         break;
 
       case 'DEFEND':
-        if (this.stateTimer > 4000) {
-          this.state = myPercent < 20 ? 'EXPAND' : 'ATTACK';
+        // Never defend for long — go back to expanding or attacking
+        if (this.stateTimer > 2500 || !this.isEnemyOnMyTerritory(scan)) {
+          this.state = scan.enemyCells.length > 2 ? 'ATTACK' : 'EXPAND';
           this.stateTimer = 0;
         }
         break;
@@ -227,9 +224,16 @@ export class BotAI {
       return;
     }
 
-    // Go to nearest enemy territory to start claiming it
+    // Pick nearest enemy territory cell to start claiming it
+    // But spread across different enemies — don't tunnel-vision on one target
     const best = scan.enemyCells
-      .sort((a, b) => a.dist - b.dist)[0];
+      .sort((a, b) => {
+        const distDiff = a.dist - b.dist;
+        // If similar distance, prefer cells not adjacent to our territory
+        // (those are already being naturally claimed at the border)
+        if (Math.abs(distDiff) < 2) return a.dist - b.dist;
+        return distDiff;
+      })[0];
 
     this.targetX = offsetX + (best.cx + 0.5) * CELL_SIZE;
     this.targetY = offsetY + (best.cy + 0.5) * CELL_SIZE;
@@ -317,10 +321,29 @@ export class BotAI {
   }
 
   /**
-   * Place obstacle to cast shadow on enemy territory.
-   * Looks for cells adjacent to enemy territory where placing an obstacle
-   * would block light from reaching the most enemy cells.
+   * Check if any enemy light is currently standing on or very near our territory.
+   * Returns true only when there's actual territory loss happening, not just proximity.
    */
+  private isEnemyOnMyTerritory(scan: ScanResult): boolean {
+    if (scan.myCellCount < 5) return false;
+    const gcx = Math.round(this.bot.getGridPosition(0, 0).cx);
+    const gcy = Math.round(this.bot.getGridPosition(0, 0).cy);
+
+    for (const enemy of scan.nearbyEnemies) {
+      // Enemy must be within 2 cells of our territory edge
+      if (enemy.dist > 3) continue;
+      // Check if there are our cells near the enemy position
+      const ecx = Math.round((enemy.wx) / CELL_SIZE);
+      const ecy = Math.round((enemy.wy) / CELL_SIZE);
+      for (const [ndx, ndy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+        const cell = this.grid.getCell(ecx + ndx, ecy + ndy);
+        if (cell && cell.ownerId === this.bot.id && cell.state !== CELL_STATE.NEUTRAL) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
   private tryStrategicObstacle(scan: ScanResult, offsetX: number, offsetY: number): void {
     const budgetLeft = this.bot.obstacleBudget - this.obstacles.getObstacleCount(this.bot.id);
     if (budgetLeft <= 0) return;
