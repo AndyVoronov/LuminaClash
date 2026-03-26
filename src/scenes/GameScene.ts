@@ -10,6 +10,7 @@ import { PlayerLight } from '../entities/PlayerLight';
 import { BotAI } from '../ai/BotAI';
 import { HUD } from '../ui/HUD';
 import { AudioManager } from '../audio/AudioManager';
+import { JuiceSystem } from '../systems/JuiceSystem';
 
 export class GameScene extends Phaser.Scene {
   private config!: GameConfig;
@@ -22,6 +23,7 @@ export class GameScene extends Phaser.Scene {
   private botAIs: BotAI[] = [];
   private hud!: HUD;
   private audio!: AudioManager;
+  private juice!: JuiceSystem;
 
   private offsetX = 0;
   private offsetY = 0;
@@ -79,6 +81,7 @@ export class GameScene extends Phaser.Scene {
         const total = this.config.mapWidth * this.config.mapHeight;
         const myCount = stats.get(ownerId) || 0;
         this.audio.playCapture(total > 0 ? (myCount / total) * 100 : 0);
+        this.juice.addCapture(wx, wy);
       }
     };
     this.grid.onCellDecayed = (wx, wy, lastOwnerId) => {
@@ -156,6 +159,9 @@ export class GameScene extends Phaser.Scene {
       this.hud.addPlayer(bc.id, bc.id);
     }
 
+    // Juice
+    this.juice = new JuiceSystem(this);
+
     // Placement preview
     this.placementPreview = this.add.graphics();
     this.placementPreview.setDepth(10);
@@ -164,8 +170,11 @@ export class GameScene extends Phaser.Scene {
     this.powerUps.onBomb = (cx, cy, playerId) => {
       this.audio.playBomb();
       const destroyed = this.obstacleSystem.destroyInRadius(cx, cy, 3);
-      // Visual feedback — burst particles at each destroyed obstacle
       if (destroyed > 0) {
+        const worldX = this.offsetX + (cx + 0.5) * CELL_SIZE;
+        const worldY = this.offsetY + (cy + 0.5) * CELL_SIZE;
+        // Shake proportional to destroyed count
+        this.juice.shake(Math.min(8, 3 + destroyed), 250);
         for (let dy = -3; dy <= 3; dy++) {
           for (let dx = -3; dx <= 3; dx++) {
             if (Math.sqrt(dx * dx + dy * dy) > 3) continue;
@@ -185,6 +194,15 @@ export class GameScene extends Phaser.Scene {
       this.audio.playPowerUpPickup();
       if (type !== 'bomb') {
         this.audio.playPowerUpActivate();
+        if (playerId === 'player') {
+          this.juice.triggerSlowMo(0.3, 400);
+          this.juice.flash(0xffffff, 0.12, 200);
+        }
+      } else {
+        if (playerId === 'player') {
+          this.juice.shake(6, 300);
+          this.juice.flash(0xff4444, 0.15, 250);
+        }
       }
     };
 
@@ -419,7 +437,14 @@ export class GameScene extends Phaser.Scene {
   // ── Main update ──
 
   update(time: number, delta: number): void {
-    if (!this.gameActive || !!this.winner) return;
+    if (!this.gameActive || !!this.winner) {
+      // Still update juice effects during end-game
+      if (this.juice) this.juice.update(delta);
+      return;
+    }
+
+    // ── Juice (always, even during pause for shake recovery) ──
+    const juiceDelta = this.juice.update(delta);
 
     // ── Logic (skip when paused) ──
     if (!this.paused) {
@@ -547,6 +572,16 @@ export class GameScene extends Phaser.Scene {
       const mainPlayer = this.players.find(p => p.id === 'player');
       const usedObstacles = mainPlayer ? this.obstacleSystem.getObstacleCount('player') : 0;
       this.hud.update(this.matchTimeLeft, stats, this.grid.getTotalCells());
+
+      // Juice: vignette + territory milestones
+      if (mainPlayer) {
+        const playerCount = stats.get('player') || 0;
+        const total = this.grid.getTotalCells();
+        const playerPct = total > 0 ? (playerCount / total) * 100 : 0;
+        this.juice.checkTerritoryMilestone(playerPct);
+        this.juice.updateVignette(this.matchTimeLeft, this.config.matchDuration);
+      }
+
       if (mainPlayer) {
         this.hud.updateObstacles(mainPlayer.obstacleBudget - usedObstacles, mainPlayer.obstacleBudget);
         const sprint = mainPlayer.getSprintInfo();
