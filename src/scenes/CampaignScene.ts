@@ -8,7 +8,7 @@ import {
   LEVELS, CHAPTER_INFO, type LevelDef,
 } from '../campaign/levels';
 import {
-  loadSave, writeSave, isLevelUnlocked, getTotalStars,
+  loadSave, writeSave, isLevelUnlocked, getTotalStars, COLOR_UNLOCKS, checkColorUnlocks,
 } from '../campaign/save';
 import type { CampaignSave } from '../campaign/save';
 import { buildGameConfig } from '../config';
@@ -73,6 +73,34 @@ export class CampaignScene extends Phaser.Scene {
     this.add.text(cx, 60, `★ ${totalStars} / ${maxStars}   |   Level ${this.save.playerLevel}   |   ${this.save.totalXP} XP`, {
       fontFamily: 'monospace', fontSize: '12px', color: '#555577',
     }).setOrigin(0.5).setDepth(10);
+
+    // Color picker
+    const colors = COLOR_UNLOCKS.filter(c => this.save.unlockedColors.includes(c.color));
+    const colorStartX = cx - (colors.length * 28) / 2;
+    for (let i = 0; i < colors.length; i++) {
+      const c = colors[i];
+      const cx2 = colorStartX + i * 28 + 14;
+      const isSelected = c.color === this.save.selectedColor;
+      const circle = this.add.circle(cx2, 78, isSelected ? 8 : 6, parseInt(c.color.replace('#', ''), 16))
+        .setDepth(10)
+        .setInteractive({ useHandCursor: true });
+      if (isSelected) {
+        const ring = this.add.graphics().setDepth(9);
+        ring.lineStyle(1.5, 0xffffff, 0.4);
+        ring.strokeCircle(cx2, 78, 11);
+      }
+      circle.on('pointerover', () => {
+        const tip = this.add.text(cx2, 95, c.name, {
+          fontFamily: 'monospace', fontSize: '10px', color: '#8888aa',
+        }).setOrigin(0.5).setDepth(10);
+        circle.once('pointerout', () => tip.destroy());
+      });
+      circle.on('pointerdown', () => {
+        this.save = { ...this.save, selectedColor: c.color };
+        writeSave(this.save);
+        this.scene.restart();
+      });
+    }
 
     // Back button
     const backBtn = this.add.text(60, 30, '← BACK', {

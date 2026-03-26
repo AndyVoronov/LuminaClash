@@ -11,7 +11,7 @@ import { BotAI } from '../ai/BotAI';
 import { HUD } from '../ui/HUD';
 import { AudioManager } from '../audio/AudioManager';
 import { JuiceSystem } from '../systems/JuiceSystem';
-import { loadSave, writeSave, submitLevelResult, calcStars } from '../campaign/save';
+import { loadSave, writeSave, submitLevelResult, calcStars, checkColorUnlocks } from '../campaign/save';
 import { getLevel, getNextLevelId, CHAPTER_INFO } from '../campaign/levels';
 
 export class GameScene extends Phaser.Scene {
@@ -103,8 +103,18 @@ export class GameScene extends Phaser.Scene {
     // Player
     const playerStartX = Math.floor(this.config.mapWidth * 0.25);
     const playerStartY = Math.floor(this.config.mapHeight / 2);
+
+    // Apply campaign color
+    let playerColor = PLAYER_COLORS.player;
+    if (this.levelId) {
+      const save = loadSave();
+      if (save.selectedColor) {
+        playerColor = parseInt(save.selectedColor.replace('#', ''), 16);
+      }
+    }
+
     const player = new PlayerLight(
-      this, 'player', PLAYER_COLORS.player,
+      this, 'player', playerColor,
       this.config.lightRadius, this.config.lightSpeed,
       this.config.obstacleBudget, true,
     );
@@ -762,7 +772,10 @@ export class GameScene extends Phaser.Scene {
       campaignStars = result.stars;
       campaignXP = result.xpEarned;
       campaignNewBest = result.newBest;
-      if (result.newBest) writeSave(result.save);
+      if (result.newBest) {
+        const finalSave = checkColorUnlocks(result.save);
+        writeSave(finalSave);
+      }
     }
 
     // ── Build overlay ──

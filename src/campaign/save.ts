@@ -138,6 +138,43 @@ export function submitLevelResult(
   return { save: newSave, xpEarned: additionalXP, stars, newBest: true };
 }
 
+/** Color unlocks by player level */
+export const COLOR_UNLOCKS: { level: number; color: string; name: string }[] = [
+  { level: 1, color: '#ffd700', name: 'Gold' },
+  { level: 2, color: '#4a9eff', name: 'Azure' },
+  { level: 3, color: '#ff6b6b', name: 'Coral' },
+  { level: 5, color: '#4aff8b', name: 'Mint' },
+  { level: 7, color: '#b44aff', name: 'Violet' },
+  { level: 10, color: '#ff44aa', name: 'Magenta' },
+  { level: 13, color: '#44ffff', name: 'Cyan' },
+  { level: 16, color: '#ff8800', name: 'Amber' },
+  { level: 20, color: '#ffffff', name: 'White' },
+];
+
+/** Check and unlock new colors based on player level */
+export function checkColorUnlocks(save: CampaignSave): CampaignSave {
+  let changed = false;
+  let newColor: string | null = null;
+  const unlocked = new Set(save.unlockedColors);
+
+  for (const unlock of COLOR_UNLOCKS) {
+    if (save.playerLevel >= unlock.level && !unlocked.has(unlock.color)) {
+      unlocked.add(unlock.color);
+      newColor = unlock.color;
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    return {
+      ...save,
+      unlockedColors: [...unlocked],
+      selectedColor: newColor || save.selectedColor,
+    };
+  }
+  return save;
+}
+
 export function getTotalStars(save: CampaignSave): number {
   return Object.values(save.levels).reduce((sum, l) => sum + l.stars, 0);
 }
