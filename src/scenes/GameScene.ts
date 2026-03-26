@@ -27,6 +27,8 @@ export class GameScene extends Phaser.Scene {
   private audio!: AudioManager;
   private juice!: JuiceSystem;
   private levelId?: string;
+  private objectiveText!: Phaser.GameObjects.Text;
+  private playerPlacedObstacles = false;
 
   private offsetX = 0;
   private offsetY = 0;
@@ -161,6 +163,17 @@ export class GameScene extends Phaser.Scene {
     this.hud.addPlayer('player', 'You');
     for (const bc of botConfigs) {
       this.hud.addPlayer(bc.id, bc.id);
+    }
+
+    // Campaign objective display
+    this.objectiveText = this.add.text(this.scale.width / 2, 48, '', {
+      fontFamily: 'monospace', fontSize: '13px', color: '#aaaacc',
+    }).setOrigin(0.5).setDepth(102).setScrollFactor(0);
+    if (this.levelId) {
+      const level = getLevel(this.levelId);
+      if (level) {
+        this.objectiveText.setText(`🎯 ${level.primary.description}`);
+      }
     }
 
     // Juice
@@ -435,6 +448,7 @@ export class GameScene extends Phaser.Scene {
       this.obstacleSystem.place(cx, cy, 'player');
       player.lastPlacementTime = Date.now();
       this.audio.playObstaclePlace();
+      this.playerPlacedObstacles = true;
     }
   }
 
@@ -584,6 +598,34 @@ export class GameScene extends Phaser.Scene {
         const playerPct = total > 0 ? (playerCount / total) * 100 : 0;
         this.juice.checkTerritoryMilestone(playerPct);
         this.juice.updateVignette(this.matchTimeLeft, this.config.matchDuration);
+
+        // Update campaign objective text
+        if (this.levelId) {
+          const level = getLevel(this.levelId);
+          if (level) {
+            let progress = '';
+            switch (level.primary.type) {
+              case 'capture_pct':
+                progress = `${playerPct.toFixed(1)}% / ${level.primary.target}%`;
+                break;
+              case 'survive_time': {
+                const elapsed = (Date.now() - this.matchStartTime) / 1000;
+                progress = `${elapsed.toFixed(0)}s / ${level.primary.target}s`;
+                break;
+              }
+              case 'destroy_towers':
+                progress = 'Destroy towers with 💣';
+                break;
+              case 'no_obstacles':
+                progress = this.playerPlacedObstacles ? '❌ Obstacle placed!' : '✓ No obstacles';
+                break;
+            }
+            this.objectiveText.setText(`🎯 ${level.primary.description}  —  ${progress}`);
+            this.objectiveText.setColor(
+              level.primary.type === 'no_obstacles' && this.playerPlacedObstacles ? '#ff4444' : '#aaaacc',
+            );
+          }
+        }
       }
 
       if (mainPlayer) {
