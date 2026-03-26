@@ -10,6 +10,7 @@ import {
   type MapTemplate,
 } from '../config';
 import { MAP_TEMPLATE_LABELS } from '../systems/MapGenerator';
+import { AudioManager } from '../audio/AudioManager';
 
 interface MenuParticle {
   x: number;
@@ -24,6 +25,7 @@ interface MenuParticle {
 
 export class MenuScene extends Phaser.Scene {
   private screen: 'main' | 'settings' = 'main';
+  private audio!: AudioManager;
 
   // Settings state
   private difficulty: 'easy' | 'medium' | 'hard' | 'nightmare' = 'medium';
@@ -53,6 +55,7 @@ export class MenuScene extends Phaser.Scene {
     } else {
       this.screen = 'main';
     }
+    this.audio = new AudioManager();
   }
 
   private matchMapPreset(w: number, h: number): 'small' | 'medium' | 'large' | null {
@@ -162,6 +165,7 @@ export class MenuScene extends Phaser.Scene {
     this.track(startZone);
 
     startZone.on('pointerover', () => {
+      this.audio.playMenuHover();
       this.renderButton(btnBg, btnX, btnY, btnW, btnH, true);
       btnText.setColor('#ffd700');
     });
@@ -170,6 +174,7 @@ export class MenuScene extends Phaser.Scene {
       btnText.setColor('#ccccdd');
     });
     startZone.on('pointerdown', () => {
+      this.audio.playMenuClick();
       this.screen = 'settings';
       this.showCurrentScreen();
     });
@@ -290,9 +295,9 @@ export class MenuScene extends Phaser.Scene {
     const backZone = this.add.zone(backX + backW / 2, backY + backH / 2, backW, backH)
       .setInteractive({ useHandCursor: true }).setDepth(6);
     this.track(backZone);
-    backZone.on('pointerover', () => { this.renderButton(backBg, backX, backY, backW, backH, true); backText.setColor('#ccccdd'); });
+    backZone.on('pointerover', () => { this.renderButton(backBg, backX, backY, backW, backH, true); backText.setColor('#ccccdd'); this.audio.playMenuHover(); });
     backZone.on('pointerout', () => { this.renderButton(backBg, backX, backY, backW, backH, false); backText.setColor('#8888aa'); });
-    backZone.on('pointerdown', () => { this.screen = 'main'; this.showCurrentScreen(); });
+    backZone.on('pointerdown', () => { this.audio.playMenuClick(); this.screen = 'main'; this.showCurrentScreen(); });
 
     // Play button
     const playW = 200;
@@ -312,9 +317,9 @@ export class MenuScene extends Phaser.Scene {
     const playZone = this.add.zone(playX + playW / 2, playY + playH / 2, playW, playH)
       .setInteractive({ useHandCursor: true }).setDepth(6);
     this.track(playZone);
-    playZone.on('pointerover', () => { this.renderPlayButton(playBg, playX, playY, playW, playH, true); });
+    playZone.on('pointerover', () => { this.renderPlayButton(playBg, playX, playY, playW, playH, true); this.audio.playMenuHover(); });
     playZone.on('pointerout', () => { this.renderPlayButton(playBg, playX, playY, playW, playH, false); });
-    playZone.on('pointerdown', () => this.startGame());
+    playZone.on('pointerdown', () => { this.audio.playMenuClick(); this.startGame(); });
 
     // Keyboard shortcut
     this.input.keyboard!.once('keydown-ENTER', () => this.startGame());

@@ -9,6 +9,7 @@ import { generateMap, placeGeneratedMap } from '../systems/MapGenerator';
 import { PlayerLight } from '../entities/PlayerLight';
 import { BotAI } from '../ai/BotAI';
 import { HUD } from '../ui/HUD';
+import { AudioManager } from '../audio/AudioManager';
 
 export class GameScene extends Phaser.Scene {
   private config!: GameConfig;
@@ -20,6 +21,7 @@ export class GameScene extends Phaser.Scene {
   private players: PlayerLight[] = [];
   private botAIs: BotAI[] = [];
   private hud!: HUD;
+  private audio!: AudioManager;
 
   private offsetX = 0;
   private offsetY = 0;
@@ -54,6 +56,7 @@ export class GameScene extends Phaser.Scene {
     this.botAIs = [];
     this.cachedIlluminated = new Map();
     this.pauseElements = [];
+    this.audio = new AudioManager();
 
     const mapWidthPx = this.config.mapWidth * CELL_SIZE;
     const mapHeightPx = this.config.mapHeight * CELL_SIZE;
@@ -71,10 +74,19 @@ export class GameScene extends Phaser.Scene {
     this.grid.onCellCaptured = (wx, wy, ownerId) => {
       const color = PLAYER_COLORS[ownerId] || 0xffffff;
       this.particles.queueCapture(wx, wy, color);
+      if (ownerId === 'player') {
+        const stats = this.grid.getStats();
+        const total = this.config.mapWidth * this.config.mapHeight;
+        const myCount = stats.get(ownerId) || 0;
+        this.audio.playCapture(total > 0 ? (myCount / total) * 100 : 0);
+      }
     };
     this.grid.onCellDecayed = (wx, wy, lastOwnerId) => {
       const color = PLAYER_COLORS[lastOwnerId] || 0xffffff;
       this.particles.queueDecay(wx, wy, color);
+      if (lastOwnerId === 'player') {
+        this.audio.playDecay();
+      }
     };
 
     this.placeInitialObstacles();
@@ -150,6 +162,7 @@ export class GameScene extends Phaser.Scene {
 
     // PowerUp bomb callback
     this.powerUps.onBomb = (cx, cy, playerId) => {
+      this.audio.playBomb();
       const destroyed = this.obstacleSystem.destroyInRadius(cx, cy, 3);
       // Visual feedback — burst particles at each destroyed obstacle
       if (destroyed > 0) {
@@ -167,6 +180,14 @@ export class GameScene extends Phaser.Scene {
       }
     };
 
+    // PowerUp pickup callback
+    this.powerUps.onPickup = (playerId, type) => {
+      this.audio.playPowerUpPickup();
+      if (type !== 'bomb') {
+        this.audio.playPowerUpActivate();
+      }
+    };
+
     // Pointer
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
       this.pointerCell = {
@@ -178,6 +199,7 @@ export class GameScene extends Phaser.Scene {
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (!this.gameActive || this.paused) return;
       this.tryPlaceObstacle(pointer.x, pointer.y);
+      this.audio.playMenuClick();
     });
 
     // Border
@@ -196,6 +218,8 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.matchStartTime = Date.now();
+    this.audio.playMatchStart();
+    this.audio.startMusic();
   }
 
   // ── Pause ──
@@ -222,7 +246,7 @@ export class GameScene extends Phaser.Scene {
 
     // Panel
     const panelW = 320;
-    const panelH = 260;
+    const panelH = 310;
     const panelX = cx - panelW / 2;
     const panelY = cy - panelH / 2;
 
@@ -287,6 +311,41 @@ export class GameScene extends Phaser.Scene {
       zone.on('pointerdown', btn.action);
     }
 
+    // Volume controls
+    const volY = panelY + 238;
+    const volLabel = this.add.text(panelX + 20, volY, 'VOL', {
+      fontFamily: 'monospace', fontSize: '11px', color: '#555577', letterSpacing: 2,
+    }).setDepth(202);
+    this.pauseElements.push(volLabel);
+
+    // Master bar
+    const barW = 180;
+    const barH = 6;
+    const barX = panelX + 60;
+    this.pauseElements.push(this.add.text(barX + barW / 2, volY - 10, `${Math.round(this.audio.masterVol * 100)}%`, {
+      fontFamily: 'monospace', fontSize: '10px', color: '#666688',
+    }).setOrigin(0.5).setDepth(202).setName('volText'));
+
+    const volBar = this.add.graphics().setDepth(202);
+    this.pauseElements.push(volBar);
+    this.renderVolumeBar(volBar, barX, volY, barW, barH, this.audio.masterVol);
+
+    // Click to toggle volume levels
+    const volZone = this.add.zone(barX + barW / 2, volY + barH / 2, barW, 20)
+      .setInteractive({ useHandCursor: true }).setDepth(204);
+    this.pauseElements.push(volZone);
+    volZone.on('pointerdown', () => {
+      // Cycle: 0% → 25% → 50% → 75% → 100% → 0%
+      const levels = [0, 0.25, 0.5, 0.75, 1.0];
+      const cur = levels.indexOf(this.audio.masterVol);
+      const next = (cur + 1) % levels.length;
+      this.audio.masterVol = levels[next];
+      this.audio.sfxVol = levels[next];
+      this.renderVolumeBar(volBar, barX, volY, barW, barH, levels[next]);
+      const vt = this.pauseElements.find(e => e.name === 'volText');
+      if (vt) (vt as Phaser.GameObjects.Text).setText(`${Math.round(levels[next] * 100)}%`);
+    });
+
     // Hint
     const hint = this.add.text(cx, panelY + panelH - 24, 'ESC to resume', {
       fontFamily: 'monospace', fontSize: '11px', color: '#3a3a55',
@@ -297,6 +356,18 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard!.once('keydown-R', () => {
       if (this.paused) { this.clearPauseOverlay(); this.scene.restart({ config: this.config }); }
     });
+  }
+
+  private renderVolumeBar(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number, vol: number): void {
+    g.clear();
+    g.fillStyle(0x1a1a30, 0.8);
+    g.fillRoundedRect(x, y, w, h, 3);
+    if (vol > 0) {
+      g.fillStyle(0xffd700, 0.6);
+      g.fillRoundedRect(x, y, w * vol, h, 3);
+    }
+    g.lineStyle(1, 0x333366, 0.3);
+    g.strokeRoundedRect(x, y, w, h, 3);
   }
 
   private hidePauseOverlay(): void {
@@ -341,6 +412,7 @@ export class GameScene extends Phaser.Scene {
     if (this.obstacleSystem.canPlace(cx, cy, 'player', this.grid)) {
       this.obstacleSystem.place(cx, cy, 'player');
       player.lastPlacementTime = Date.now();
+      this.audio.playObstaclePlace();
     }
   }
 
@@ -354,6 +426,19 @@ export class GameScene extends Phaser.Scene {
       // Timer
       if (this.config.matchDuration > 0) {
         this.matchTimeLeft -= delta / 1000;
+        // Timer sounds
+        if (this.matchTimeLeft <= 10 && this.matchTimeLeft > 0) {
+          const sec = Math.ceil(this.matchTimeLeft);
+          if (Math.abs(this.matchTimeLeft - sec) < delta / 1000 * 1.1) {
+            this.audio.playTimerTick(true);
+          }
+        } else if (this.matchTimeLeft <= 30 && this.matchTimeLeft > 10) {
+          const sec = Math.ceil(this.matchTimeLeft);
+          if (sec % 5 === 0 && Math.abs(this.matchTimeLeft - sec) < delta / 1000 * 1.1) {
+            this.audio.playTimerTick(false);
+            if (sec === 30) this.audio.intensifyMusic();
+          }
+        }
         if (this.matchTimeLeft <= 0) {
           this.matchTimeLeft = 0;
           this.endMatch();
@@ -548,6 +633,7 @@ export class GameScene extends Phaser.Scene {
     this.gameActive = false;
     this.paused = false;
     this.clearPauseOverlay();
+    this.audio.stopMusic();
 
     const stats = this.grid.getStats();
 
@@ -559,6 +645,11 @@ export class GameScene extends Phaser.Scene {
     // Find player placement
     const playerPlacement = rankings.findIndex(r => r.id === 'player');
     const isPlayerWin = playerPlacement === 0;
+    if (isPlayerWin) {
+      this.audio.playVictory();
+    } else {
+      this.audio.playDefeat();
+    }
 
     // Calculate XP
     const playerCount = stats.get('player') || 0;

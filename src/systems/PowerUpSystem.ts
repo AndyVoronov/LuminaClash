@@ -54,6 +54,7 @@ export class PowerUpSystem {
 
   // Callbacks
   onBomb?: (cx: number, cy: number, playerId: string) => void;
+  onPickup?: (playerId: string, type: string) => void;
 
   constructor(scene: Phaser.Scene, grid: GridSystem, obstacles: ObstacleSystem) {
     this.scene = scene;
@@ -87,6 +88,7 @@ export class PowerUpSystem {
 
         if (dist < CELL_SIZE * 0.7) {
           this.activatePowerUp(player, spawn);
+          if (this.onPickup) this.onPickup(player.id, spawn.type);
           break;
         }
       }
