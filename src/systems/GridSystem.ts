@@ -14,6 +14,10 @@ export class GridSystem {
   width: number;
   height: number;
 
+  // Optional callbacks for visual feedback
+  onCellCaptured?: (worldX: number, worldY: number, ownerId: string) => void;
+  onCellDecayed?: (worldX: number, worldY: number, lastOwnerId: string) => void;
+
   constructor(
     private scene: Phaser.Scene,
     mapWidth: number,
@@ -108,10 +112,24 @@ export class GridSystem {
           if (cell.progress >= 1) {
             cell.progress = 1;
             cell.state = CELL_STATE.OWNED;
+            if (this.onCellCaptured) {
+              this.onCellCaptured(
+                x * CELL_SIZE + CELL_SIZE / 2,
+                y * CELL_SIZE + CELL_SIZE / 2,
+                cell.ownerId,
+              );
+            }
           }
         } else if (cell.state === CELL_STATE.DECAYING) {
           cell.progress -= delta / 500; // decayTime normalized
           if (cell.progress <= 0) {
+            if (this.onCellDecayed && cell.ownerId) {
+              this.onCellDecayed(
+                x * CELL_SIZE + CELL_SIZE / 2,
+                y * CELL_SIZE + CELL_SIZE / 2,
+                cell.ownerId,
+              );
+            }
             cell.progress = 0;
             cell.state = CELL_STATE.NEUTRAL;
             cell.ownerId = null;
@@ -125,6 +143,7 @@ export class GridSystem {
   render(offsetX: number, offsetY: number, illuminatedCells: Map<string, Set<string>>): void {
     this.graphics.clear();
 
+    // Pass 1: Draw cell backgrounds
     for (let y = 0; y < this.height; y++) {
       for (let x = 0; x < this.width; x++) {
         const cell = this.cells[y][x];
@@ -132,38 +151,45 @@ export class GridSystem {
         const py = offsetY + y * CELL_SIZE;
 
         if (cell.state === CELL_STATE.NEUTRAL) {
-          // Dark background with subtle grid
-          this.graphics.fillStyle(0x12121a, 1);
+          this.graphics.fillStyle(0x0e0e16, 1);
           this.graphics.fillRect(px, py, CELL_SIZE, CELL_SIZE);
-          this.graphics.lineStyle(1, 0x1a1a2e, 0.5);
-          this.graphics.strokeRect(px + 0.5, py + 0.5, CELL_SIZE - 1, CELL_SIZE - 1);
         } else {
-          // Owned or transitioning cell
           const color = PLAYER_COLORS[cell.ownerId!] || 0x444444;
           const alpha = cell.state === CELL_STATE.CLAIMING
-            ? 0.2 + cell.progress * 0.5
+            ? 0.15 + cell.progress * 0.55
             : cell.state === CELL_STATE.DECAYING
-              ? cell.progress * 0.7
+              ? Math.max(0.05, cell.progress * 0.7)
               : 0.7;
 
           this.graphics.fillStyle(color, alpha);
           this.graphics.fillRect(px, py, CELL_SIZE, CELL_SIZE);
-
-          // Grid line
-          this.graphics.lineStyle(1, 0x000000, 0.2);
-          this.graphics.strokeRect(px + 0.5, py + 0.5, CELL_SIZE - 1, CELL_SIZE - 1);
         }
       }
     }
 
-    // Render illumination overlay (soft glow)
+    // Pass 2: Subtle grid lines
+    this.graphics.lineStyle(1, 0x1a1a2e, 0.25);
+    for (let y = 0; y <= this.height; y++) {
+      this.graphics.lineBetween(
+        offsetX, offsetY + y * CELL_SIZE,
+        offsetX + this.width * CELL_SIZE, offsetY + y * CELL_SIZE,
+      );
+    }
+    for (let x = 0; x <= this.width; x++) {
+      this.graphics.lineBetween(
+        offsetX + x * CELL_SIZE, offsetY,
+        offsetX + x * CELL_SIZE, offsetY + this.height * CELL_SIZE,
+      );
+    }
+
+    // Pass 3: Illumination glow (additive blend)
     this.graphics.setBlendMode(Phaser.BlendModes.ADD);
     for (const [ownerId, cells] of illuminatedCells) {
       const color = PLAYER_COLORS[ownerId] || 0xffd700;
       const r = (color >> 16) & 0xff;
       const g = (color >> 8) & 0xff;
       const b = color & 0xff;
-      this.graphics.fillStyle(Phaser.Display.Color.GetColor(r, g, b), 0.08);
+      this.graphics.fillStyle(Phaser.Display.Color.GetColor(r, g, b), 0.06);
       for (const key of cells) {
         const [cx, cy] = key.split(',').map(Number);
         const px = offsetX + cx * CELL_SIZE;

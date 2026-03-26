@@ -18,8 +18,17 @@ export class PlayerLight {
   // Movement
   private cursors: Phaser.Types.Input.Keyboard.CursorKeys | null = null;
   private wasd: { W: Phaser.Input.Keyboard.Key; A: Phaser.Input.Keyboard.Key; S: Phaser.Input.Keyboard.Key; D: Phaser.Input.Keyboard.Key } | null = null;
+  private shiftKey: Phaser.Input.Keyboard.Key | null = null;
   private moveX: number = 0;
   private moveY: number = 0;
+
+  // Sprint
+  private sprinting = false;
+  private sprintEnergy = 100;
+  private readonly SPRINT_MAX = 100;
+  private readonly SPRINT_COST = 40; // per second
+  private readonly SPRINT_REGEN = 15; // per second
+  private readonly SPRINT_MULT = 1.8;
 
   // Illuminated cells for rendering
   illuminatedCells: Set<string> = new Set();
@@ -62,6 +71,7 @@ export class PlayerLight {
         S: scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S),
         D: scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D),
       };
+      this.shiftKey = scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
     }
   }
 
@@ -92,7 +102,18 @@ export class PlayerLight {
     }
 
     // Apply movement
-    const speed = this.lightSpeed * (delta / 1000);
+    let speed = this.lightSpeed * (delta / 1000);
+
+    // Sprint logic (player only)
+    if (this.shiftKey) {
+      this.sprinting = this.shiftKey.isDown && this.sprintEnergy > 0 && (this.moveX !== 0 || this.moveY !== 0);
+      if (this.sprinting) {
+        speed *= this.SPRINT_MULT;
+        this.sprintEnergy = Math.max(0, this.sprintEnergy - this.SPRINT_COST * (delta / 1000));
+      } else {
+        this.sprintEnergy = Math.min(this.SPRINT_MAX, this.sprintEnergy + this.SPRINT_REGEN * (delta / 1000));
+      }
+    }
     this.wx += this.moveX * speed;
     this.wy += this.moveY * speed;
 
@@ -150,6 +171,11 @@ export class PlayerLight {
   setMoveInput(x: number, y: number): void {
     this.moveX = x;
     this.moveY = y;
+  }
+
+  getSprintInfo(): { energy: number; max: number; active: boolean } | null {
+    if (!this.shiftKey) return null;
+    return { energy: this.sprintEnergy, max: this.SPRINT_MAX, active: this.sprinting };
   }
 
   destroy(): void {

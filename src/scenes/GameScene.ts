@@ -3,6 +3,7 @@ import { CELL_SIZE, PLAYER_COLORS, DEFAULT_CONFIG, type GameConfig } from '../co
 import { GridSystem } from '../systems/GridSystem';
 import { LightSystem } from '../systems/LightSystem';
 import { ObstacleSystem } from '../systems/ObstacleSystem';
+import { ParticleSystem } from '../systems/ParticleSystem';
 import { PlayerLight } from '../entities/PlayerLight';
 import { BotAI } from '../ai/BotAI';
 import { HUD } from '../ui/HUD';
@@ -12,6 +13,7 @@ export class GameScene extends Phaser.Scene {
   private grid!: GridSystem;
   private lightSystem!: LightSystem;
   private obstacleSystem!: ObstacleSystem;
+  private particles!: ParticleSystem;
   private players: PlayerLight[] = [];
   private botAIs: BotAI[] = [];
   private hud!: HUD;
@@ -49,7 +51,18 @@ export class GameScene extends Phaser.Scene {
     // Clear previous scene objects
     this.grid = new GridSystem(this, this.config.mapWidth, this.config.mapHeight, this.offsetX, this.offsetY);
     this.obstacleSystem = new ObstacleSystem(this);
+    this.particles = new ParticleSystem(this);
     this.lightSystem = new LightSystem(this.grid, () => this.obstacleSystem.getObstacleCells());
+
+    // Connect particle callbacks
+    this.grid.onCellCaptured = (wx, wy, ownerId) => {
+      const color = PLAYER_COLORS[ownerId] || 0xffffff;
+      this.particles.queueCapture(wx, wy, color);
+    };
+    this.grid.onCellDecayed = (wx, wy, lastOwnerId) => {
+      const color = PLAYER_COLORS[lastOwnerId] || 0xffffff;
+      this.particles.queueDecay(wx, wy, color);
+    };
 
     // Add some initial obstacles on the map (walls)
     this.placeInitialObstacles();
@@ -121,6 +134,7 @@ export class GameScene extends Phaser.Scene {
 
     // HUD
     this.hud = new HUD(this);
+    this.hud.setGrid(this.grid);
     this.hud.addPlayer('player', 'You');
     for (const bc of botConfigs) {
       this.hud.addPlayer(bc.id, bc.id);
@@ -262,6 +276,12 @@ export class GameScene extends Phaser.Scene {
     // Render obstacles
     this.obstacleSystem.render(this.offsetX, this.offsetY);
 
+    // Update particles
+    this.particles.update(delta);
+
+    // Render minimap
+    this.hud.renderMinimap();
+
     // Render placement preview
     this.renderPlacementPreview();
 
@@ -272,6 +292,10 @@ export class GameScene extends Phaser.Scene {
     this.hud.update(this.matchTimeLeft, stats, this.grid.getTotalCells());
     if (mainPlayer) {
       this.hud.updateObstacles(mainPlayer.obstacleBudget - usedObstacles, mainPlayer.obstacleBudget);
+      const sprint = mainPlayer.getSprintInfo();
+      if (sprint) {
+        this.hud.updateSprint(sprint.energy, sprint.max, sprint.active);
+      }
     }
 
     // Check win condition

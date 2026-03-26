@@ -101,6 +101,7 @@ export class MenuScene extends Phaser.Scene {
 
     const controls = [
       'WASD / Arrows  —  Move light',
+      'SHIFT  —  Sprint',
       'Click  —  Place obstacle',
       'ESC  —  Menu',
     ];
