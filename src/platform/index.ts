@@ -15,7 +15,7 @@ export interface PlatformAPI {
   init(): Promise<void>;
 
   /** Show an ad. Returns true if shown, false if unavailable/skipped. */
-  showAd(type: 'interstitial' | 'rewarded', onClose?: () => void): Promise<boolean>;
+  showAd(type: 'interstitial' | 'rewarded', onRewarded?: () => void, onClose?: () => void): Promise<boolean>;
 
   /** Save data to platform cloud (if available), fall back to localStorage. */
   saveCloud(key: string, data: string): Promise<void>;
@@ -32,6 +32,12 @@ export interface PlatformAPI {
   /** Notify platform that loading is complete (some platforms require this). */
   gameReady(): void;
 
+  /** Notify platform that gameplay has started (for analytics). */
+  gameplayStart(): void;
+
+  /** Notify platform that gameplay has stopped (for analytics / ad timing). */
+  gameplayStop(): void;
+
   /** Show platform's pause overlay (some platforms require this on blur). */
   pauseGame(): void;
 
@@ -47,7 +53,8 @@ class WebPlatform implements PlatformAPI {
     console.log('[Platform] Web — no SDK');
   }
 
-  async showAd(_type: string, onClose?: () => void): Promise<boolean> {
+  async showAd(_type: string, onRewarded?: () => void, onClose?: () => void): Promise<boolean> {
+    onRewarded?.();
     onClose?.();
     return false;
   }
@@ -68,17 +75,11 @@ class WebPlatform implements PlatformAPI {
     console.log(`[Analytics] ${event}`, params ?? '');
   }
 
-  gameReady(): void {
-    // no-op
-  }
-
-  pauseGame(): void {
-    // no-op
-  }
-
-  resumeGame(): void {
-    // no-op
-  }
+  gameReady(): void {}
+  gameplayStart(): void {}
+  gameplayStop(): void {}
+  pauseGame(): void {}
+  resumeGame(): void {}
 }
 
 /** Yandex Games SDK integration */
@@ -92,34 +93,52 @@ class YandexPlatform implements PlatformAPI {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       this.ysdk = await (window as any).YaGames.init();
       console.log('[Platform] Yandex Games SDK initialized');
+
+      // Pause / Resume events from platform
+      this.ysdk.on('game_api_pause', () => {
+        const game = (window as any).__PHASER_GAME__;
+        if (game?.scene?.scenes) {
+          const active = game.scene.scenes.find((s: any) => s.scene?.isActive());
+          if (active?.scene?.key === 'GameScene') active.scene.pause?.();
+        }
+      });
+
+      this.ysdk.on('game_api_resume', () => {
+        const game = (window as any).__PHASER_GAME__;
+        if (game?.scene?.scenes) {
+          const active = game.scene.scenes.find((s: any) => s.scene?.isPaused());
+          if (active?.scene?.key === 'GameScene') active.scene.resume?.();
+        }
+      });
     } catch (e) {
       console.warn('[Platform] Failed to init Yandex SDK:', e);
     }
   }
 
-  async showAd(type: string, onClose?: () => void): Promise<boolean> {
+  async showAd(type: string, onRewarded?: () => void, onClose?: () => void): Promise<boolean> {
     if (!this.ysdk) return false;
     try {
+      this.gameplayStop();
       if (type === 'rewarded') {
-        const state = await this.ysdk.adv.showRewardedVideo({
+        await this.ysdk.adv.showRewardedVideo({
           callbacks: {
-            onRewarded: () => onClose?.(),
-            onClose: () => {},
-            onError: () => console.warn('[Platform] Rewarded ad error'),
+            onRewarded: () => { this.gameplayStart(); onRewarded?.(); },
+            onClose: () => { this.gameplayStart(); onClose?.(); },
+            onError: () => { this.gameplayStart(); },
           },
         });
-        return true;
       } else {
         await this.ysdk.adv.showFullscreenAdv({
           callbacks: {
-            onClose: () => onClose?.(),
+            onClose: () => { this.gameplayStart(); onClose?.(); },
             onOpen: () => {},
-            onError: () => console.warn('[Platform] Interstitial ad error'),
+            onError: () => { this.gameplayStart(); },
           },
         });
-        return true;
       }
+      return true;
     } catch {
+      this.gameplayStart();
       return false;
     }
   }
@@ -143,7 +162,6 @@ class YandexPlatform implements PlatformAPI {
   }
 
   trackEvent(event: string, params?: Record<string, string | number>): void {
-    // Yandex metrica integration would go here
     console.log(`[Yandex] ${event}`, params ?? '');
   }
 
@@ -152,13 +170,19 @@ class YandexPlatform implements PlatformAPI {
     try { this.ysdk.features.LoadingAPI.ready(); } catch { /* noop */ }
   }
 
-  pauseGame(): void {
-    // Yandex handles this automatically
+  gameplayStart(): void {
+    if (!this.ysdk) return;
+    try { this.ysdk.features.GameplayAPI.start(); } catch {}
   }
 
-  resumeGame(): void {
-    // Yandex handles this automatically
+  gameplayStop(): void {
+    if (!this.ysdk) return;
+    try { this.ysdk.features.GameplayAPI.stop(); } catch {}
   }
+
+  pauseGame(): void {}
+
+  resumeGame(): void {}
 }
 
 /** VK Play SDK integration (placeholder) */
@@ -169,7 +193,8 @@ class VKPlayPlatform implements PlatformAPI {
     console.log('[Platform] VK Play SDK — placeholder');
   }
 
-  async showAd(_type: string, onClose?: () => void): Promise<boolean> {
+  async showAd(_type: string, onRewarded?: () => void, onClose?: () => void): Promise<boolean> {
+    onRewarded?.();
     onClose?.();
     return false;
   }
@@ -189,9 +214,9 @@ class VKPlayPlatform implements PlatformAPI {
   }
 
   gameReady(): void {}
-
+  gameplayStart(): void {}
+  gameplayStop(): void {}
   pauseGame(): void {}
-
   resumeGame(): void {}
 }
 

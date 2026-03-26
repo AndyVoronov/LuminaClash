@@ -15,6 +15,7 @@ import { loadSave, writeSave, submitLevelResult, calcStars, checkColorUnlocks } 
 import { getLevel, getNextLevelId, CHAPTER_INFO } from '../campaign/levels';
 import { TouchControls } from '../ui/TouchControls';
 import { TutorialOverlay } from '../tutorial/TutorialOverlay';
+import { platform } from '../platform';
 
 export class GameScene extends Phaser.Scene {
   private config!: GameConfig;
@@ -64,6 +65,7 @@ export class GameScene extends Phaser.Scene {
     this.gameActive = true;
     this.winner = null;
     this.paused = false;
+    platform.gameplayStart();
     this.players = [];
     this.botAIs = [];
     this.cachedIlluminated = new Map();
@@ -178,6 +180,18 @@ export class GameScene extends Phaser.Scene {
     for (const bc of botConfigs) {
       this.hud.addPlayer(bc.id, bc.id);
     }
+
+    // Sound toggle button (top-right)
+    const soundMuted = { value: false };
+    const soundBtn = this.add.text(this.scale.width - 12, 12, '🔊', {
+      fontSize: '18px',
+    }).setOrigin(1, 0).setDepth(102).setInteractive({ useHandCursor: true }).setScrollFactor(0);
+    soundBtn.on('pointerdown', () => {
+      soundMuted.value = !soundMuted.value;
+      this.sound.mute = soundMuted.value;
+      this.audio.masterVol = soundMuted.value ? 0 : 0.5;
+      soundBtn.setText(soundMuted.value ? '🔇' : '🔊');
+    });
 
     // Campaign objective display
     this.objectiveText = this.add.text(this.scale.width / 2, 48, '', {
@@ -779,6 +793,7 @@ export class GameScene extends Phaser.Scene {
     this.paused = false;
     this.clearPauseOverlay();
     this.audio.stopMusic();
+    platform.gameplayStop();
 
     const stats = this.grid.getStats();
 
@@ -926,6 +941,30 @@ export class GameScene extends Phaser.Scene {
       fontFamily: 'monospace', fontSize: '11px', color: '#3a3a55',
     }).setOrigin(0.5).setDepth(203);
 
+    // Rewarded ad button (bonus XP)
+    const rewardY = xpY + 64 + (this.levelId && campaignStars > 0 ? 30 : 0) + 4;
+    const rewardBtn = this.add.text(cx, rewardY, '📺 Watch Ad → +25 XP', {
+      fontFamily: 'monospace', fontSize: '12px', color: '#555577',
+    }).setOrigin(0.5).setDepth(203).setInteractive({ useHandCursor: true });
+    rewardBtn.on('pointerover', () => { rewardBtn.setColor('#ffdd77'); });
+    rewardBtn.on('pointerout', () => { rewardBtn.setColor('#555577'); });
+    rewardBtn.on('pointerdown', async () => {
+      const shown = await platform.showAd('rewarded',
+        () => {
+          sessionStats.totalXP += 25;
+          rewardBtn.setText('✓ +25 XP earned!');
+          rewardBtn.setColor('#44ff88');
+          rewardBtn.removeInteractive();
+        },
+        () => {},
+      );
+      if (!shown) {
+        rewardBtn.setText('Ad unavailable');
+        rewardBtn.setColor('#664444');
+        rewardBtn.removeInteractive();
+      }
+    });
+
     // Campaign stars
     if (this.levelId && campaignStars > 0) {
       const starsStr = '★'.repeat(campaignStars) + '☆'.repeat(3 - campaignStars);
@@ -950,17 +989,17 @@ export class GameScene extends Phaser.Scene {
       const totalBtnW = 130 + 16 + 130 + 16 + 100;
       const btnStartX = cx - totalBtnW / 2;
       buttons = [
-        { label: 'Next Level', x: btnStartX + 65, w: 130, action: () => this.startCampaignLevel(nextLevelId!) },
-        { label: 'Retry', x: btnStartX + 130 + 16 + 65, w: 130, action: () => this.scene.restart({ config: this.config, levelId: this.levelId }) },
-        { label: 'Menu', x: btnStartX + 130 + 16 + 130 + 16 + 50, w: 100, action: () => this.scene.start('CampaignScene') },
+        { label: 'Next Level', x: btnStartX + 65, w: 130, action: () => { platform.gameplayStart(); this.startCampaignLevel(nextLevelId!); } },
+        { label: 'Retry', x: btnStartX + 130 + 16 + 65, w: 130, action: () => { platform.gameplayStart(); this.scene.restart({ config: this.config, levelId: this.levelId }); } },
+        { label: 'Menu', x: btnStartX + 130 + 16 + 130 + 16 + 50, w: 100, action: () => { platform.gameplayStart(); this.scene.start('CampaignScene'); } },
       ];
     } else {
       const totalBtnW = 150 + 16 + 130 + 16 + 100;
       const btnStartX = cx - totalBtnW / 2;
       buttons = [
-        { label: 'Next Match', x: btnStartX + 75, w: 150, action: () => this.scene.restart({ config: this.config }) },
-        { label: 'Settings', x: btnStartX + 150 + 16 + 65, w: 130, action: () => this.scene.start('MenuScene', { lastConfig: this.config }) },
-        { label: 'Menu', x: btnStartX + 150 + 16 + 130 + 16 + 50, w: 100, action: () => this.scene.start('MenuScene') },
+        { label: 'Next Match', x: btnStartX + 75, w: 150, action: () => { platform.gameplayStart(); this.scene.restart({ config: this.config }); } },
+        { label: 'Settings', x: btnStartX + 150 + 16 + 65, w: 130, action: () => { platform.gameplayStart(); this.scene.start('MenuScene', { lastConfig: this.config }); } },
+        { label: 'Menu', x: btnStartX + 150 + 16 + 130 + 16 + 50, w: 100, action: () => { platform.gameplayStart(); this.scene.start('MenuScene'); } },
       ];
     }
 

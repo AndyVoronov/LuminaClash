@@ -12,7 +12,7 @@ const config: Phaser.Types.Core.GameConfig = {
   backgroundColor: '#0a0a0f',
   pixelArt: false,
   scale: {
-    mode: Phaser.Scale.FIT,
+    mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
   render: {
@@ -32,5 +32,5 @@ platform.init().then(() => {
   platform.gameReady();
   platform.trackEvent('game_start');
 }).catch(() => {
-  // Platform init failed — continue as web
+  platform.gameReady();
 });
