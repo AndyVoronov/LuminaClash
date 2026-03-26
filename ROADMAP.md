@@ -90,7 +90,7 @@
   - Validate: все спавн-точки достижимы и не в тени
 - Редактор карт (stretch goal — для post-launch)
 
-### S04: Advanced Bot AI `risk:medium` `depends:[S01, S02]`
+### S04: Advanced Bot AI `risk:medium` `depends:[S01, S02]` ✅ DONE
 - Бот difficulty tiers влияют на реальные параметры:
   - Easy: 1 бот, slow reaction (2s), radius -10%, speed -20%
   - Medium: 2 бота, normal reaction (1.2-1.5s), normal stats
