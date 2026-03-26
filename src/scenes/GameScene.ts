@@ -245,18 +245,36 @@ export class GameScene extends Phaser.Scene {
     const illuminatedMap = new Map<string, Set<string>>();
     const lightPositions = new Map<string, { cx: number; cy: number; radius: number }>();
 
+    // Pass 1: compute illumination for all players
     for (const p of this.players) {
       const pos = p.getGridPosition(this.offsetX, this.offsetY);
       lightPositions.set(p.id, { cx: pos.cx, cy: pos.cy, radius: p.lightRadius });
 
-      this.lightSystem.processLight(
-        p.id,
-        pos.cx,
-        pos.cy,
-        p.lightRadius,
-        p.illuminatedCells,
+      this.lightSystem.computeIllumination(
+        pos.cx, pos.cy, p.lightRadius, p.illuminatedCells,
       );
       illuminatedMap.set(p.id, p.illuminatedCells);
+    }
+
+    // Find contested cells — illuminated by 2+ players
+    const contestedCells = new Set<string>();
+    const cellOwners = new Map<string, number>();
+    for (const [, cells] of illuminatedMap) {
+      for (const key of cells) {
+        const count = (cellOwners.get(key) || 0) + 1;
+        cellOwners.set(key, count);
+        if (count >= 2) contestedCells.add(key);
+      }
+    }
+    this.grid.contestedCells = contestedCells;
+
+    // Pass 2: claim territory, skipping contested cells
+    for (const p of this.players) {
+      const pos = p.getGridPosition(this.offsetX, this.offsetY);
+      this.lightSystem.claimTerritory(
+        p.id, pos.cx, pos.cy, p.lightRadius,
+        p.illuminatedCells, contestedCells,
+      );
     }
 
     // Update obstacle system with light positions (for dissolution)

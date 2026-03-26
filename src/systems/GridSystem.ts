@@ -18,6 +18,9 @@ export class GridSystem {
   onCellCaptured?: (worldX: number, worldY: number, ownerId: string) => void;
   onCellDecayed?: (worldX: number, worldY: number, lastOwnerId: string) => void;
 
+  // Contested cells (illuminated by 2+ players)
+  contestedCells: Set<string> = new Set();
+
   constructor(
     private scene: Phaser.Scene,
     mapWidth: number,
@@ -142,6 +145,7 @@ export class GridSystem {
 
   render(offsetX: number, offsetY: number, illuminatedCells: Map<string, Set<string>>): void {
     this.graphics.clear();
+    const t = Date.now() / 1000;
 
     // Pass 1: Draw cell backgrounds
     for (let y = 0; y < this.height; y++) {
@@ -149,8 +153,14 @@ export class GridSystem {
         const cell = this.cells[y][x];
         const px = offsetX + x * CELL_SIZE;
         const py = offsetY + y * CELL_SIZE;
+        const key = `${x},${y}`;
 
-        if (cell.state === CELL_STATE.NEUTRAL) {
+        if (this.contestedCells.has(key) && cell.state === CELL_STATE.NEUTRAL) {
+          // Contested neutral zone — soft flicker, no player color
+          const flicker = 0.12 + Math.sin(t * 4 + x * 0.5 + y * 0.3) * 0.06;
+          this.graphics.fillStyle(0x888899, flicker);
+          this.graphics.fillRect(px, py, CELL_SIZE, CELL_SIZE);
+        } else if (cell.state === CELL_STATE.NEUTRAL) {
           this.graphics.fillStyle(0x0e0e16, 1);
           this.graphics.fillRect(px, py, CELL_SIZE, CELL_SIZE);
         } else {
@@ -182,7 +192,7 @@ export class GridSystem {
       );
     }
 
-    // Pass 3: Illumination glow (additive blend)
+    // Pass 3: Illumination glow — SKIP contested cells (no additive stacking)
     this.graphics.setBlendMode(Phaser.BlendModes.ADD);
     for (const [ownerId, cells] of illuminatedCells) {
       const color = PLAYER_COLORS[ownerId] || 0xffd700;
@@ -191,6 +201,7 @@ export class GridSystem {
       const b = color & 0xff;
       this.graphics.fillStyle(Phaser.Display.Color.GetColor(r, g, b), 0.06);
       for (const key of cells) {
+        if (this.contestedCells.has(key)) continue; // No glow on contested
         const [cx, cy] = key.split(',').map(Number);
         const px = offsetX + cx * CELL_SIZE;
         const py = offsetY + cy * CELL_SIZE;

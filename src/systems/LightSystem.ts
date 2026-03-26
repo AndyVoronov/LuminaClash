@@ -11,73 +11,95 @@ export class LightSystem {
   }
 
   /**
-   * Process illumination for a player.
-   *
-   * Rules:
-   * - Cells with line of sight to the light → get claimed (illuminated)
-   * - Cells within radius but BLOCKED by obstacle → in shadow → if owned, start decaying
-   * - Cells outside all light radii → keep their current state (no change)
-   *
-   * Territory is permanent. Only obstacle shadows erase it.
+   * First pass: compute illuminated cells for a player (raycasting only, no claiming).
    */
-  processLight(
-    playerId: string,
+  computeIllumination(
     sourceCX: number,
     sourceCY: number,
     radius: number,
     illuminatedCells: Set<string>,
   ): void {
     illuminatedCells.clear();
-    const grid = this.grid;
     const r = Math.ceil(radius);
     const srcX = Math.round(sourceCX);
     const srcY = Math.round(sourceCY);
+    const obstacles = this.getObstacles();
 
     for (let dy = -r; dy <= r; dy++) {
       for (let dx = -r; dx <= r; dx++) {
         const cx = srcX + dx;
         const cy = srcY + dy;
-
-        // Circular radius check
         const dist = Math.sqrt(dx * dx + dy * dy);
         if (dist > radius) continue;
 
-        const cell = grid.getCell(cx, cy);
+        const cell = this.grid.getCell(cx, cy);
         if (!cell) continue;
+        if (this.grid.isBlocked(cx, cy, obstacles)) continue;
+        if (!this.grid.hasLineOfSight(srcX, srcY, cx, cy, obstacles)) continue;
 
-        // Obstacle cell itself — skip
-        if (grid.isBlocked(cx, cy, this.getObstacles())) continue;
+        illuminatedCells.add(`${cx},${cy}`);
+      }
+    }
+  }
+
+  /**
+   * Second pass: claim territory for a player, respecting contested cells.
+   *
+   * - Cells illuminated ONLY by this player → get claimed
+   * - Cells in BOTH this player's light AND shadow → decay if owned
+   * - Contested cells (2+ lights overlap) → no claiming, neutral zone
+   * - Cells outside radius entirely → keep current state
+   */
+  claimTerritory(
+    playerId: string,
+    sourceCX: number,
+    sourceCY: number,
+    radius: number,
+    illuminatedCells: Set<string>,
+    contestedCells: Set<string>,
+  ): void {
+    const r = Math.ceil(radius);
+    const srcX = Math.round(sourceCX);
+    const srcY = Math.round(sourceCY);
+    const obstacles = this.getObstacles();
+
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        const cx = srcX + dx;
+        const cy = srcY + dy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > radius) continue;
+
+        const cell = this.grid.getCell(cx, cy);
+        if (!cell) continue;
+        if (this.grid.isBlocked(cx, cy, obstacles)) continue;
 
         const key = `${cx},${cy}`;
-        const hasLOS = grid.hasLineOfSight(srcX, srcY, cx, cy, this.getObstacles());
+        const isLit = illuminatedCells.has(key);
+        const isContested = contestedCells.has(key);
 
-        if (hasLOS) {
-          // ── ILLUMINATED: claim territory ──
-          illuminatedCells.add(key);
-
+        if (isLit && !isContested) {
+          // ── Solely illuminated: claim territory ──
           if (cell.state === CELL_STATE.NEUTRAL || cell.state === CELL_STATE.DECAYING) {
             cell.ownerId = playerId;
             cell.progress = cell.state === CELL_STATE.DECAYING ? cell.progress : 0;
             cell.state = CELL_STATE.CLAIMING;
           } else if (cell.state === CELL_STATE.CLAIMING && cell.ownerId === playerId) {
-            // Continue claiming — progress updated in GridSystem.update()
+            // Continue claiming
           } else if (cell.state === CELL_STATE.OWNED && cell.ownerId !== playerId) {
-            // Another player owns this cell — overwrite it
+            // Overwrite enemy territory
             cell.ownerId = playerId;
             cell.progress = 0.3;
             cell.state = CELL_STATE.CLAIMING;
           }
-          // else: OWNED by us — do nothing, territory persists
-        } else {
-          // ── IN SHADOW (obstacle blocks line of sight) ──
-          // If this cell is owned by anyone, start erasing it
+          // else: OWNED by us — territory persists
+        } else if (!isLit) {
+          // ── IN SHADOW: erase territory ──
           if (cell.state === CELL_STATE.OWNED || cell.state === CELL_STATE.CLAIMING) {
             cell.state = CELL_STATE.DECAYING;
-            // progress decreases in GridSystem.update()
           }
-          // DECAYING cells stay decaying — progress continues decreasing
-          // NEUTRAL cells stay neutral — nothing to erase
         }
+        // else: contested or lit-but-contested → do nothing (neutral zone)
       }
     }
   }
