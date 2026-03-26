@@ -713,8 +713,13 @@ export class GameScene extends Phaser.Scene {
     const cy = H / 2;
 
     const total = this.grid.getTotalCells();
-    const panelW = 380;
-    const panelH = 320 + rankings.length * 26;
+    const rankingH = rankings.length * 26;
+    const xpSectionH = 70; // XP title + breakdown + session
+    const buttonsH = 60;   // button row + padding
+    const titleH = 70;     // title area
+    const padding = 24;    // top + bottom padding
+    const panelH = titleH + rankingH + xpSectionH + buttonsH + padding;
+    const panelW = 400;
     const panelX = cx - panelW / 2;
     const panelY = cy - panelH / 2;
 
@@ -747,7 +752,7 @@ export class GameScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(203);
 
     // Scores
-    let scoreY = panelY + 80;
+    let scoreY = panelY + titleH - 6;
     for (const rank of rankings) {
       const pct = ((rank.count / total) * 100).toFixed(1);
       const color = PLAYER_COLORS[rank.id] || 0xffffff;
@@ -795,11 +800,13 @@ export class GameScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(203);
 
     // Buttons
-    const btnY = panelY + panelH - 60;
+    const btnY = panelY + panelH - buttonsH + 12;
+    const totalBtnW = 150 + 16 + 130 + 16 + 100; // buttons + gaps
+    const btnStartX = cx - totalBtnW / 2;
     const buttons = [
-      { label: 'Next Match', x: cx - 180, w: 150, action: () => this.scene.restart({ config: this.config }) },
-      { label: 'Settings', x: cx - 10, w: 130, action: () => this.scene.start('MenuScene', { lastConfig: this.config }) },
-      { label: 'Menu', x: cx + 150, w: 100, action: () => this.scene.start('MenuScene') },
+      { label: 'Next Match', x: btnStartX + 75, w: 150, action: () => this.scene.restart({ config: this.config }) },
+      { label: 'Settings', x: btnStartX + 150 + 16 + 65, w: 130, action: () => this.scene.start('MenuScene', { lastConfig: this.config }) },
+      { label: 'Menu', x: btnStartX + 150 + 16 + 130 + 16 + 50, w: 100, action: () => this.scene.start('MenuScene') },
     ];
 
     for (const btn of buttons) {

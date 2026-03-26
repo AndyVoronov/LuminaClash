@@ -191,15 +191,14 @@ export class MenuScene extends Phaser.Scene {
       ['Click', 'Place obstacle'],
       ['ESC', 'Pause'],
     ];
-    for (const [key, desc] of controls) {
-      ctrlY; // just for reference
-      this.track(this.add.text(cx - 60, ctrlY + 24 + controls.indexOf([key, desc]) * 20, key, {
+    controls.forEach(([key, desc], i) => {
+      this.track(this.add.text(cx - 60, ctrlY + 24 + i * 20, key, {
         fontFamily: 'monospace', fontSize: '12px', color: '#8888aa',
       }).setOrigin(0.5).setDepth(4));
-      this.track(this.add.text(cx + 50, ctrlY + 24 + controls.indexOf([key, desc]) * 20, desc, {
+      this.track(this.add.text(cx + 50, ctrlY + 24 + i * 20, desc, {
         fontFamily: 'monospace', fontSize: '12px', color: '#555570',
       }).setOrigin(0.5).setDepth(4));
-    }
+    });
 
     // Session stats
     if (sessionStats.matchesPlayed > 0) {
