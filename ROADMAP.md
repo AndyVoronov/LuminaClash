@@ -132,7 +132,7 @@
 
 > Цель: звуковая дизайн, screen shake, combo-система — всё что делает игру "ощутимой".
 
-### S01: Sound Design `risk:low` `depends:[]`
+### S01: Sound Design `risk:low` `depends:[]` ✅ DONE
 - Сгенерировать/найти звуковые эффекты (Web Audio API):
   - Territory capture (мягкий chime, pitch varies with territory size)
   - Territory decay (низкий hum)
@@ -147,7 +147,7 @@
 - Фоновая музыка: ambient loop (synth + soft pads), intensifies when match time <30s
 - Volume controls (master / music / sfx) — в pause menu
 
-### S02: Game Juice `risk:low` `depends:[M3/S02]`
+### S02: Game Juice `risk:low` `depends:[M3/S02]` ✅ DONE
 - Screen shake при уничтожении tower / bomb power-up
 - Slow-motion (time scale 0.3) на 0.5s при pick-up power-up
 - Combo counter: быстрые захваты → умножитель, отображается рядом с orb
