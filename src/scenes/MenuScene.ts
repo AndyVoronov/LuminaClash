@@ -7,7 +7,9 @@ import {
   buildGameConfig,
   sessionStats,
   type GameConfig,
+  type MapTemplate,
 } from '../config';
+import { MAP_TEMPLATE_LABELS } from '../systems/MapGenerator';
 
 interface MenuParticle {
   x: number;
@@ -26,6 +28,7 @@ export class MenuScene extends Phaser.Scene {
   // Settings state
   private difficulty: 'easy' | 'medium' | 'hard' = 'medium';
   private mapKey: 'small' | 'medium' | 'large' = 'medium';
+  private mapTemplate: MapTemplate = 'arena';
   private duration: number = 120;
 
   // Animated background
@@ -44,6 +47,7 @@ export class MenuScene extends Phaser.Scene {
     if (data?.lastConfig) {
       this.difficulty = data.lastConfig.difficulty || 'medium';
       this.mapKey = this.matchMapPreset(data.lastConfig.mapWidth, data.lastConfig.mapHeight) || 'medium';
+      this.mapTemplate = data.lastConfig.mapTemplate || 'arena';
       this.duration = data.lastConfig.matchDuration;
       this.screen = 'settings';
     } else {
@@ -219,21 +223,28 @@ export class MenuScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(4));
 
     // Difficulty
-    this.buildOptionRow(cx, 120, 'DIFFICULTY',
+    this.buildOptionRow(cx, 110, 'DIFFICULTY',
       Object.entries(DIFFICULTY_PRESETS).map(([k, v]) => ({ value: k, label: v.label })),
       this.difficulty,
       (v) => { this.difficulty = v as 'easy' | 'medium' | 'hard'; },
     );
 
     // Map size
-    this.buildOptionRow(cx, 220, 'MAP SIZE',
+    this.buildOptionRow(cx, 190, 'MAP SIZE',
       Object.entries(MAP_PRESETS).map(([k, v]) => ({ value: k, label: v.label })),
       this.mapKey,
       (v) => { this.mapKey = v as 'small' | 'medium' | 'large'; },
     );
 
+    // Map template
+    this.buildOptionRow(cx, 270, 'MAP TYPE',
+      (Object.entries(MAP_TEMPLATE_LABELS) as [MapTemplate, string][]).map(([k, v]) => ({ value: k, label: v })),
+      this.mapTemplate,
+      (v) => { this.mapTemplate = v as MapTemplate; },
+    );
+
     // Duration
-    this.buildOptionRow(cx, 320, 'TIME LIMIT',
+    this.buildOptionRow(cx, 350, 'TIME LIMIT',
       DURATION_OPTIONS.map(o => ({ value: String(o.value), label: o.label })),
       String(this.duration),
       (v) => { this.duration = Number(v); },
@@ -241,9 +252,9 @@ export class MenuScene extends Phaser.Scene {
 
     // Map preview
     const previewW = 320;
-    const previewH = 180;
+    const previewH = 140;
     const previewX = cx - previewW / 2;
-    const previewY = 395;
+    const previewY = 400;
 
     const previewBg = this.add.graphics().setDepth(4);
     this.track(previewBg);
@@ -457,7 +468,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private startGame(): void {
-    const config = buildGameConfig(this.difficulty, this.mapKey, this.duration);
+    const config = buildGameConfig(this.difficulty, this.mapKey, this.duration, this.mapTemplate);
     this.scene.start('GameScene', { config });
   }
 

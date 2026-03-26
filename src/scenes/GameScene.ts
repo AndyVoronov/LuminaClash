@@ -5,6 +5,7 @@ import { LightSystem } from '../systems/LightSystem';
 import { ObstacleSystem } from '../systems/ObstacleSystem';
 import { ParticleSystem } from '../systems/ParticleSystem';
 import { PowerUpSystem } from '../systems/PowerUpSystem';
+import { generateMap, placeGeneratedMap } from '../systems/MapGenerator';
 import { PlayerLight } from '../entities/PlayerLight';
 import { BotAI } from '../ai/BotAI';
 import { HUD } from '../ui/HUD';
@@ -310,38 +311,21 @@ export class GameScene extends Phaser.Scene {
   // ── Obstacles ──
 
   private placeInitialObstacles(): void {
-    const mw = this.config.mapWidth;
-    const mh = this.config.mapHeight;
-    const mid = { x: Math.floor(mw / 2), y: Math.floor(mh / 2) };
+    // Gather spawn positions
+    const spawns: { x: number; y: number }[] = [];
+    for (const p of this.players) {
+      const pos = p.getGridPosition(this.offsetX, this.offsetY);
+      spawns.push({ x: Math.round(pos.cx), y: Math.round(pos.cy) });
+    }
 
-    // Central tower (doesn't dissolve from light)
-    this.obstacleSystem.place(mid.x, mid.y, 'system', 'tower');
-
-    // Walls around center
-    this.obstacleSystem.place(mid.x - 2, mid.y - 1, 'system', 'wall');
-    this.obstacleSystem.place(mid.x + 2, mid.y + 1, 'system', 'wall');
-    this.obstacleSystem.place(mid.x, mid.y - 2, 'system', 'wall');
-    this.obstacleSystem.place(mid.x, mid.y + 2, 'system', 'wall');
-
-    // Corner obstacles
-    this.obstacleSystem.place(3, 3, 'system', 'wall');
-    this.obstacleSystem.place(mw - 4, 3, 'system', 'wall');
-    this.obstacleSystem.place(3, mh - 4, 'system', 'wall');
-    this.obstacleSystem.place(mw - 4, mh - 4, 'system', 'wall');
-
-    // Side walls
-    this.obstacleSystem.place(Math.floor(mw * 0.3), Math.floor(mh * 0.2), 'system', 'wall');
-    this.obstacleSystem.place(Math.floor(mw * 0.7), Math.floor(mh * 0.8), 'system', 'wall');
-    this.obstacleSystem.place(Math.floor(mw * 0.3), Math.floor(mh * 0.8), 'system', 'wall');
-    this.obstacleSystem.place(Math.floor(mw * 0.7), Math.floor(mh * 0.2), 'system', 'wall');
-
-    // Blinkers — strategic positions
-    this.obstacleSystem.place(Math.floor(mw * 0.5) - 3, mid.y, 'system', 'blinker');
-    this.obstacleSystem.place(Math.floor(mw * 0.5) + 3, mid.y, 'system', 'blinker');
-
-    // Mirrors — reflect light for strategic advantage
-    this.obstacleSystem.place(Math.floor(mw * 0.15), Math.floor(mh * 0.5), 'system', 'mirror', 0);
-    this.obstacleSystem.place(Math.floor(mw * 0.85), Math.floor(mh * 0.5), 'system', 'mirror', 2);
+    const obstacles = generateMap(
+      this.config.mapTemplate,
+      this.config.mapWidth,
+      this.config.mapHeight,
+      this.config.mapSeed,
+      spawns,
+    );
+    placeGeneratedMap(this.obstacleSystem, obstacles);
   }
 
   private tryPlaceObstacle(worldX: number, worldY: number): void {

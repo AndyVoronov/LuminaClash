@@ -94,9 +94,13 @@ export const sessionStats: SessionStats = {
 
 // ── Game config ──
 
+export type MapTemplate = 'arena' | 'maze' | 'fortress' | 'chaos';
+
 export interface GameConfig {
   mapWidth: number;
   mapHeight: number;
+  mapTemplate: MapTemplate;
+  mapSeed: number;
   lightRadius: number;
   lightSpeed: number;
   claimTime: number;
@@ -137,6 +141,8 @@ export function buildGameConfig(
   difficulty: 'easy' | 'medium' | 'hard',
   mapKey: 'small' | 'medium' | 'large',
   duration: number,
+  mapTemplate: MapTemplate = 'arena',
+  mapSeed?: number,
 ): GameConfig {
   const dp = DIFFICULTY_PRESETS[difficulty];
   const mp = MAP_PRESETS[mapKey];
@@ -144,6 +150,8 @@ export function buildGameConfig(
   return {
     mapWidth: mp.mapWidth,
     mapHeight: mp.mapHeight,
+    mapTemplate,
+    mapSeed: mapSeed ?? Date.now(),
     lightRadius: 6,
     lightSpeed: 160,
     claimTime: 300,
