@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { MenuScene } from './scenes/MenuScene';
 import { CampaignScene } from './scenes/CampaignScene';
 import { GameScene } from './scenes/GameScene';
+import { platform } from './platform';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.WEBGL,
@@ -25,3 +26,11 @@ const game = new Phaser.Game(config);
 
 // Export for debugging
 (window as unknown as Record<string, unknown>).__PHASER_GAME__ = game;
+
+// Platform SDK init
+platform.init().then(() => {
+  platform.gameReady();
+  platform.trackEvent('game_start');
+}).catch(() => {
+  // Platform init failed — continue as web
+});

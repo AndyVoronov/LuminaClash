@@ -13,6 +13,7 @@ import { AudioManager } from '../audio/AudioManager';
 import { JuiceSystem } from '../systems/JuiceSystem';
 import { loadSave, writeSave, submitLevelResult, calcStars, checkColorUnlocks } from '../campaign/save';
 import { getLevel, getNextLevelId, CHAPTER_INFO } from '../campaign/levels';
+import { TouchControls } from '../ui/TouchControls';
 
 export class GameScene extends Phaser.Scene {
   private config!: GameConfig;
@@ -29,6 +30,7 @@ export class GameScene extends Phaser.Scene {
   private levelId?: string;
   private objectiveText!: Phaser.GameObjects.Text;
   private playerPlacedObstacles = false;
+  private touchControls: TouchControls | null = null;
 
   private offsetX = 0;
   private offsetY = 0;
@@ -186,6 +188,31 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
+    // Touch controls (mobile support)
+    this.touchControls = new TouchControls(
+      this, player,
+      () => { if (!this.winner) this.togglePause(); },
+      (pointer) => {
+        if (!this.gameActive || this.paused) return;
+        // Place obstacle at player position on touch
+        const mainPlayer = this.players.find(p => p.id === 'player');
+        if (mainPlayer) {
+          this.tryPlaceObstacle(mainPlayer.wx, mainPlayer.wy);
+          this.audio.playMenuClick();
+        }
+      },
+    );
+    // Auto-enable on touch devices
+    if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+      this.touchControls.setEnabled(true);
+    }
+    // Also enable if first pointer is a touch
+    this.input.once('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (pointer.wasTouch && this.touchControls) {
+        this.touchControls.setEnabled(true);
+      }
+    });
+
     // Juice
     this.juice = new JuiceSystem(this);
 
@@ -243,6 +270,7 @@ export class GameScene extends Phaser.Scene {
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (!this.gameActive || this.paused) return;
+      if (this.touchControls?.isEnabled() && pointer.wasTouch) return; // handled by TouchControls
       this.tryPlaceObstacle(pointer.x, pointer.y);
       this.audio.playMenuClick();
     });

@@ -20,6 +20,12 @@ export class PlayerLight {
   private moveX: number = 0;
   private moveY: number = 0;
 
+  // Touch override
+  private touchMoveX: number = 0;
+  private touchMoveY: number = 0;
+  private touchSprintActive = false;
+  useTouchInput = false;
+
   // Sprint
   private sprinting = false;
   private sprintEnergy = 100;
@@ -41,6 +47,17 @@ export class PlayerLight {
 
   obstacleBudget: number;
   lastPlacementTime: number = 0;
+
+  /** Set touch joystick direction (-1..1 each axis) */
+  setTouchMove(x: number, y: number): void {
+    this.touchMoveX = x;
+    this.touchMoveY = y;
+  }
+
+  /** Set touch sprint on/off */
+  setTouchSprint(active: boolean): void {
+    this.touchSprintActive = active;
+  }
 
   constructor(
     scene: Phaser.Scene,
@@ -101,7 +118,10 @@ export class PlayerLight {
   }
 
   update(delta: number, gridWidth: number, gridHeight: number, offsetX: number, offsetY: number): void {
-    if (this.cursors) {
+    if (this.useTouchInput) {
+      this.moveX = this.touchMoveX;
+      this.moveY = this.touchMoveY;
+    } else if (this.cursors) {
       this.moveX = 0;
       this.moveY = 0;
       if (this.cursors.left.isDown || this.wasd!.A.isDown) this.moveX = -1;
@@ -118,14 +138,15 @@ export class PlayerLight {
 
     let speed = this.lightSpeed * (delta / 1000) * this.speedMult;
 
-    if (this.shiftKey) {
-      this.sprinting = this.shiftKey.isDown && this.sprintEnergy > 0 && (this.moveX !== 0 || this.moveY !== 0);
-      if (this.sprinting) {
-        speed *= this.SPRINT_MULT;
-        this.sprintEnergy = Math.max(0, this.sprintEnergy - this.SPRINT_COST * (delta / 1000));
-      } else {
-        this.sprintEnergy = Math.min(this.SPRINT_MAX, this.sprintEnergy + this.SPRINT_REGEN * (delta / 1000));
-      }
+    const wantSprint = this.useTouchInput
+      ? this.touchSprintActive
+      : (this.shiftKey ? this.shiftKey.isDown : false);
+    this.sprinting = wantSprint && this.sprintEnergy > 0 && (this.moveX !== 0 || this.moveY !== 0);
+    if (this.sprinting) {
+      speed *= this.SPRINT_MULT;
+      this.sprintEnergy = Math.max(0, this.sprintEnergy - this.SPRINT_COST * (delta / 1000));
+    } else {
+      this.sprintEnergy = Math.min(this.SPRINT_MAX, this.sprintEnergy + this.SPRINT_REGEN * (delta / 1000));
     }
 
     this.wx += this.moveX * speed;

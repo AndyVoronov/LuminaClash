@@ -56,18 +56,21 @@ export class GridSystem {
       });
     }
 
-    // Layers: bg → cells → borders → glow
+    // Layers: bg → gridLines → cells → borders → glow
     this.bgGraphics = scene.add.graphics();
     this.bgGraphics.setDepth(0);
     this.cellGraphics = scene.add.graphics();
     this.cellGraphics.setDepth(1);
+    const gridLineGraphics = scene.add.graphics();
+    gridLineGraphics.setDepth(2);
     this.borderGraphics = scene.add.graphics();
-    this.borderGraphics.setDepth(2);
+    this.borderGraphics.setDepth(3);
     this.glowGraphics = scene.add.graphics();
-    this.glowGraphics.setDepth(3);
+    this.glowGraphics.setDepth(4);
 
-    // Render static background once
+    // Render static background once (includes grid lines)
     this.renderBackground(offsetX, offsetY);
+    this.renderGridLines(gridLineGraphics, offsetX, offsetY);
   }
 
   private renderBackground(offsetX: number, offsetY: number): void {
@@ -84,6 +87,24 @@ export class GridSystem {
       const ny = offsetY + Math.random() * h;
       this.bgGraphics.fillStyle(0x161625, 0.3 + Math.random() * 0.3);
       this.bgGraphics.fillRect(Math.floor(nx), Math.floor(ny), 1, 1);
+    }
+  }
+
+  private renderGridLines(g: Phaser.GameObjects.Graphics, offsetX: number, offsetY: number): void {
+    const cs = CELL_SIZE;
+    // Grid lines are static — render once into borderGraphics
+    this.borderGraphics.lineStyle(1, 0x161622, 0.2);
+    for (let y = 0; y <= this.height; y++) {
+      this.borderGraphics.lineBetween(
+        offsetX, offsetY + y * cs,
+        offsetX + this.width * cs, offsetY + y * cs,
+      );
+    }
+    for (let x = 0; x <= this.width; x++) {
+      this.borderGraphics.lineBetween(
+        offsetX + x * cs, offsetY,
+        offsetX + x * cs, offsetY + this.height * cs,
+      );
     }
   }
 
@@ -248,22 +269,9 @@ export class GridSystem {
       }
     }
 
-    // ── Pass 3: Grid lines (very subtle) ──
-    this.borderGraphics.lineStyle(1, 0x161622, 0.2);
-    for (let y = 0; y <= this.height; y++) {
-      this.borderGraphics.lineBetween(
-        offsetX, offsetY + y * cs,
-        offsetX + this.width * cs, offsetY + y * cs,
-      );
-    }
-    for (let x = 0; x <= this.width; x++) {
-      this.borderGraphics.lineBetween(
-        offsetX + x * cs, offsetY,
-        offsetX + x * cs, offsetY + this.height * cs,
-      );
-    }
+    // Grid lines are now static (rendered once in renderGridLines)
 
-    // ── Pass 4: Light glow overlay (additive, no contested) ──
+    // ── Pass 3: Light glow overlay (additive, no contested) ──
     this.glowGraphics.clear();
     this.glowGraphics.setBlendMode(Phaser.BlendModes.ADD);
 

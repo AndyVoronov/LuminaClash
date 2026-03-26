@@ -8,6 +8,7 @@ export class HUD {
     text: Phaser.GameObjects.Text;
     bar: Phaser.GameObjects.Graphics;
     barBg: Phaser.GameObjects.Graphics;
+    baseY: number;
   }> = new Map();
   private timerText: Phaser.GameObjects.Text;
   private obstacleText: Phaser.GameObjects.Text;
@@ -20,6 +21,8 @@ export class HUD {
   private minimapX = 0;
   private minimapY = 0;
   private panelWidth = 230;
+  private panelHeight = 190;
+  private scaleRatio = 1;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -56,15 +59,30 @@ export class HUD {
     this.minimapGraphics.setDepth(100);
     this.minimapGraphics.setScrollFactor(0);
 
+    this.calculateScale();
     this.renderPanel();
+
+    scene.scale.on('resize', () => {
+      this.calculateScale();
+      this.renderPanel();
+      if (this.grid) this.repositionMinimap();
+    });
+  }
+
+  private calculateScale(): void {
+    const W = this.scene.scale.width;
+    // Base design: 1280px wide. Scale UI elements proportionally below 1024px.
+    this.scaleRatio = W < 1024 ? Math.max(0.6, W / 1024) : 1;
+    this.panelWidth = Math.round(230 * this.scaleRatio);
   }
 
   private renderPanel(): void {
     const bg = this.panelBg;
     const w = this.panelWidth;
-    const h = 190;
-    const px = 8;
-    const py = 8;
+    const h = Math.round(190 * this.scaleRatio);
+    const px = Math.round(8 * this.scaleRatio);
+    const py = Math.round(8 * this.scaleRatio);
+    this.panelHeight = h;
 
     bg.clear();
 
@@ -81,45 +99,57 @@ export class HUD {
     bg.strokeRoundedRect(px, py, w, h, 10);
 
     // Position elements
-    this.timerText.setPosition(px + 16, py + 14);
-    this.obstacleText.setPosition(px + 16, py + 42);
-    this.sprintText.setPosition(px + 16, py + 62);
+    const fs20 = Math.round(20 * this.scaleRatio);
+    const fs13 = Math.round(13 * this.scaleRatio);
+    const fs11 = Math.round(11 * this.scaleRatio);
+
+    this.timerText.setFontSize(fs20).setPosition(px + Math.round(16 * this.scaleRatio), py + Math.round(14 * this.scaleRatio));
+    this.obstacleText.setFontSize(fs13).setPosition(px + Math.round(16 * this.scaleRatio), py + Math.round(42 * this.scaleRatio));
+    this.sprintText.setFontSize(fs11).setPosition(px + Math.round(16 * this.scaleRatio), py + Math.round(62 * this.scaleRatio));
   }
 
   setGrid(grid: GridSystem): void {
     this.grid = grid;
-    this.minimapX = this.scene.scale.width - (grid.width * this.MINIMAP_CELL) - 14;
-    this.minimapY = this.scene.scale.height - (grid.height * this.MINIMAP_CELL) - 14;
+    this.repositionMinimap();
+  }
+
+  private repositionMinimap(): void {
+    if (!this.grid) return;
+    const cellSize = Math.max(2, Math.round(this.MINIMAP_CELL * this.scaleRatio));
+    this.minimapX = this.scene.scale.width - (this.grid.width * cellSize) - Math.round(14 * this.scaleRatio);
+    this.minimapY = this.scene.scale.height - (this.grid.height * cellSize) - Math.round(14 * this.scaleRatio);
   }
 
   addPlayer(id: string, name: string): void {
-    const y = 100 + this.statsEntries.size * 28;
-    const px = 8;
+    const s = this.scaleRatio;
+    const px = Math.round(8 * s);
+    const y = Math.round(100 * s) + this.statsEntries.size * Math.round(28 * s);
     const color = PLAYER_COLORS[id] || 0xffffff;
     const colorHex = '#' + color.toString(16).padStart(6, '0');
 
     // Color dot
-    const dot = this.scene.add.circle(px + 24, y + 10, 5, color);
+    const dot = this.scene.add.circle(px + Math.round(24 * s), y + Math.round(10 * s), Math.round(5 * s), color);
     dot.setDepth(101).setScrollFactor(0);
 
     // Name + count text
-    const text = this.scene.add.text(px + 36, y + 2, '', {
+    const text = this.scene.add.text(px + Math.round(36 * s), y + Math.round(2 * s), '', {
       fontFamily: 'monospace',
-      fontSize: '13px',
+      fontSize: Math.round(13 * s) + 'px',
       color: colorHex,
     }).setDepth(101).setScrollFactor(0);
 
     // Progress bar background
     const barBg = this.scene.add.graphics();
     barBg.setDepth(101).setScrollFactor(0);
+    const barW = Math.round(196 * s);
     barBg.fillStyle(0x151520, 0.8);
-    barBg.fillRoundedRect(px + 16, y + 20, 196, 5, 2);
+    barBg.fillRoundedRect(px + Math.round(16 * s), y + Math.round(20 * s), barW, Math.round(5 * s), 2);
 
     // Progress bar fill
     const bar = this.scene.add.graphics();
     bar.setDepth(101).setScrollFactor(0);
 
-    this.statsEntries.set(id, { text, bar, barBg });
+    this.statsEntries.set(id, { text, bar, barBg, baseY: y });
   }
 
   update(time: number, stats: Map<string, number>, totalCells: number): void {
@@ -147,11 +177,17 @@ export class HUD {
 
       // Progress bar
       const color = PLAYER_COLORS[id] || 0xffffff;
+      const s = this.scaleRatio;
+      const barW = Math.max(0, Math.round(196 * s) * (pct / 100));
+      const idx = [...this.statsEntries.keys()].indexOf(id);
       entry.bar.clear();
-      const barW = Math.max(0, 196 * (pct / 100));
       if (barW > 0) {
         entry.bar.fillStyle(color, 0.6);
-        entry.bar.fillRoundedRect(8 + 16, 100 + [...this.statsEntries.keys()].indexOf(id) * 28 + 20, barW, 5, 2);
+        entry.bar.fillRoundedRect(
+          Math.round(8 * s) + Math.round(16 * s),
+          Math.round(100 * s) + idx * Math.round(28 * s) + Math.round(20 * s),
+          barW, Math.round(5 * s), 2,
+        );
       }
     }
   }
@@ -162,10 +198,11 @@ export class HUD {
   }
 
   updateSprint(energy: number, max: number, active: boolean): void {
-    const barX = 24;
-    const barY = 76;
-    const barW = 120;
-    const barH = 6;
+    const s = this.scaleRatio;
+    const barX = Math.round(24 * s);
+    const barY = Math.round(76 * s);
+    const barW = Math.round(120 * s);
+    const barH = Math.round(6 * s);
     const pct = energy / max;
 
     this.sprintBar.clear();
@@ -191,7 +228,7 @@ export class HUD {
     const g = this.minimapGraphics;
     g.clear();
 
-    const cs = this.MINIMAP_CELL;
+    const cs = Math.max(2, Math.round(this.MINIMAP_CELL * this.scaleRatio));
     const mx = this.minimapX;
     const my = this.minimapY;
     const mw = this.grid.width * cs;
