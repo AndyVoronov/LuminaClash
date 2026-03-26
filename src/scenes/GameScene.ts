@@ -310,22 +310,38 @@ export class GameScene extends Phaser.Scene {
   // ── Obstacles ──
 
   private placeInitialObstacles(): void {
-    const mid = { x: Math.floor(this.config.mapWidth / 2), y: Math.floor(this.config.mapHeight / 2) };
+    const mw = this.config.mapWidth;
+    const mh = this.config.mapHeight;
+    const mid = { x: Math.floor(mw / 2), y: Math.floor(mh / 2) };
+
+    // Central tower (doesn't dissolve from light)
     this.obstacleSystem.place(mid.x, mid.y, 'system', 'tower');
+
+    // Walls around center
     this.obstacleSystem.place(mid.x - 2, mid.y - 1, 'system', 'wall');
     this.obstacleSystem.place(mid.x + 2, mid.y + 1, 'system', 'wall');
     this.obstacleSystem.place(mid.x, mid.y - 2, 'system', 'wall');
     this.obstacleSystem.place(mid.x, mid.y + 2, 'system', 'wall');
 
+    // Corner obstacles
     this.obstacleSystem.place(3, 3, 'system', 'wall');
-    this.obstacleSystem.place(this.config.mapWidth - 4, 3, 'system', 'wall');
-    this.obstacleSystem.place(3, this.config.mapHeight - 4, 'system', 'wall');
-    this.obstacleSystem.place(this.config.mapWidth - 4, this.config.mapHeight - 4, 'system', 'wall');
+    this.obstacleSystem.place(mw - 4, 3, 'system', 'wall');
+    this.obstacleSystem.place(3, mh - 4, 'system', 'wall');
+    this.obstacleSystem.place(mw - 4, mh - 4, 'system', 'wall');
 
-    this.obstacleSystem.place(Math.floor(this.config.mapWidth * 0.3), Math.floor(this.config.mapHeight * 0.2), 'system', 'wall');
-    this.obstacleSystem.place(Math.floor(this.config.mapWidth * 0.7), Math.floor(this.config.mapHeight * 0.8), 'system', 'wall');
-    this.obstacleSystem.place(Math.floor(this.config.mapWidth * 0.3), Math.floor(this.config.mapHeight * 0.8), 'system', 'wall');
-    this.obstacleSystem.place(Math.floor(this.config.mapWidth * 0.7), Math.floor(this.config.mapHeight * 0.2), 'system', 'wall');
+    // Side walls
+    this.obstacleSystem.place(Math.floor(mw * 0.3), Math.floor(mh * 0.2), 'system', 'wall');
+    this.obstacleSystem.place(Math.floor(mw * 0.7), Math.floor(mh * 0.8), 'system', 'wall');
+    this.obstacleSystem.place(Math.floor(mw * 0.3), Math.floor(mh * 0.8), 'system', 'wall');
+    this.obstacleSystem.place(Math.floor(mw * 0.7), Math.floor(mh * 0.2), 'system', 'wall');
+
+    // Blinkers — strategic positions
+    this.obstacleSystem.place(Math.floor(mw * 0.5) - 3, mid.y, 'system', 'blinker');
+    this.obstacleSystem.place(Math.floor(mw * 0.5) + 3, mid.y, 'system', 'blinker');
+
+    // Mirrors — reflect light for strategic advantage
+    this.obstacleSystem.place(Math.floor(mw * 0.15), Math.floor(mh * 0.5), 'system', 'mirror', 0);
+    this.obstacleSystem.place(Math.floor(mw * 0.85), Math.floor(mh * 0.5), 'system', 'mirror', 2);
   }
 
   private tryPlaceObstacle(worldX: number, worldY: number): void {
@@ -420,6 +436,14 @@ export class GameScene extends Phaser.Scene {
         lightPositions.set(p.id, { cx: pos.cx, cy: pos.cy, radius: effectiveR });
         this.lightSystem.computeIllumination(pos.cx, pos.cy, effectiveR, p.illuminatedCells);
         illuminatedMap.set(p.id, p.illuminatedCells);
+
+        // Add mirror-reflected cells
+        const mirrorCells = this.obstacleSystem.mirrorIlluminated.get(p.id);
+        if (mirrorCells) {
+          for (const key of mirrorCells) {
+            p.illuminatedCells.add(key);
+          }
+        }
       }
 
       // Contested cells
