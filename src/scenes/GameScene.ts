@@ -132,7 +132,7 @@ export class GameScene extends Phaser.Scene {
     for (const p of this.players) {
       if (p.id !== 'player') {
         const bc = botConfigs.find(b => b.id === p.id)!;
-        this.botAIs.push(new BotAI(p, this.grid, this.obstacleSystem, bc.reaction, this.players));
+        this.botAIs.push(new BotAI(p, this.grid, this.obstacleSystem, bc.reaction, this.players, this.config.difficulty, this.powerUps));
       }
     }
 

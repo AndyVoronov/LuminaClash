@@ -26,7 +26,7 @@ export class MenuScene extends Phaser.Scene {
   private screen: 'main' | 'settings' = 'main';
 
   // Settings state
-  private difficulty: 'easy' | 'medium' | 'hard' = 'medium';
+  private difficulty: 'easy' | 'medium' | 'hard' | 'nightmare' = 'medium';
   private mapKey: 'small' | 'medium' | 'large' = 'medium';
   private mapTemplate: MapTemplate = 'arena';
   private duration: number = 120;
@@ -226,7 +226,7 @@ export class MenuScene extends Phaser.Scene {
     this.buildOptionRow(cx, 110, 'DIFFICULTY',
       Object.entries(DIFFICULTY_PRESETS).map(([k, v]) => ({ value: k, label: v.label })),
       this.difficulty,
-      (v) => { this.difficulty = v as 'easy' | 'medium' | 'hard'; },
+      (v) => { this.difficulty = v as 'easy' | 'medium' | 'hard' | 'nightmare'; },
     );
 
     // Map size

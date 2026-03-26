@@ -28,7 +28,7 @@ export interface DifficultyConfig {
   label: string;
 }
 
-export const DIFFICULTY_PRESETS: Record<'easy' | 'medium' | 'hard', DifficultyConfig> = {
+export const DIFFICULTY_PRESETS: Record<'easy' | 'medium' | 'hard' | 'nightmare', DifficultyConfig> = {
   easy: {
     botCount: 1,
     botReactionDelay: 2000,
@@ -52,6 +52,14 @@ export const DIFFICULTY_PRESETS: Record<'easy' | 'medium' | 'hard', DifficultyCo
     botRadiusMult: 1.1,
     obstacleBudget: 8,
     label: 'Hard',
+  },
+  nightmare: {
+    botCount: 3,
+    botReactionDelay: 400,
+    botSpeedMult: 1.1,
+    botRadiusMult: 1.2,
+    obstacleBudget: 12,
+    label: 'Nightmare',
   },
 };
 
@@ -109,7 +117,7 @@ export interface GameConfig {
   winPercent: number;
   obstacleBudget: number;
   obstacleCooldown: number;
-  difficulty: 'easy' | 'medium' | 'hard';
+  difficulty: 'easy' | 'medium' | 'hard' | 'nightmare';
   botCount: number;
   botReactionDelay: number;
   botSpeedMult: number;
@@ -138,7 +146,7 @@ export interface ObstacleConfig {
 // ── Build config from selections ──
 
 export function buildGameConfig(
-  difficulty: 'easy' | 'medium' | 'hard',
+  difficulty: 'easy' | 'medium' | 'hard' | 'nightmare',
   mapKey: 'small' | 'medium' | 'large',
   duration: number,
   mapTemplate: MapTemplate = 'arena',

@@ -263,6 +263,15 @@ export class PowerUpSystem {
     }
   }
 
+  /** Get current spawn world positions (for bot AI targeting). */
+  getSpawnPositions(): { wx: number; wy: number }[] {
+    return this.spawns.filter(s => s.alive).map(s => {
+      const px = s.cx * 32 + 16; // approximate world position
+      const py = s.cy * 32 + 16;
+      return { wx: px, wy: py };
+    });
+  }
+
   destroy(): void {
     this.graphics.destroy();
     for (const [, label] of this.spawnLabels) label.destroy();
