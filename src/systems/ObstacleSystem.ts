@@ -16,13 +16,14 @@ export class ObstacleSystem {
   private obstacles: Map<string, ObstacleData> = new Map();
   private obstacleCells: Set<string> = new Set();
   private graphics: Phaser.GameObjects.Graphics;
+  private shadowGraphics: Phaser.GameObjects.Graphics;
   private scene: Phaser.Scene;
-
-  // For obstacle dissolution (proximity to light sources)
   private lightPositions: Map<string, { cx: number; cy: number; radius: number }> = new Map();
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
+    this.shadowGraphics = scene.add.graphics();
+    this.shadowGraphics.setDepth(4);
     this.graphics = scene.add.graphics();
     this.graphics.setDepth(5);
   }
@@ -33,17 +34,10 @@ export class ObstacleSystem {
 
   canPlace(cx: number, cy: number, playerId: string, grid: { getCell: (x: number, y: number) => { ownerId: string | null; state: number } | null }): boolean {
     const key = `${cx},${cy}`;
-
-    // Already occupied
     if (this.obstacleCells.has(key)) return false;
-
-    // Check cell exists and is not owned by placer
     const cell = grid.getCell(cx, cy);
     if (!cell) return false;
-
-    // Can place on neutral or enemy cells, not on your own
     if (cell.ownerId === playerId) return false;
-
     return true;
   }
 
@@ -52,10 +46,7 @@ export class ObstacleSystem {
 
     const obstacle: ObstacleData = {
       id: `obs_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      cx,
-      cy,
-      ownerId,
-      type,
+      cx, cy, ownerId, type,
       createdAt: Date.now(),
       dissolveStart: null,
       blinkOn: true,
@@ -77,92 +68,110 @@ export class ObstacleSystem {
     const toRemove: string[] = [];
 
     for (const [id, obs] of this.obstacles) {
-      // Blinker logic
       if (obs.type === 'blinker') {
         const elapsed = Date.now() - obs.createdAt;
         obs.blinkOn = Math.floor(elapsed / 2000) % 2 === 0;
         if (obs.blinkOn) {
-          if (!this.obstacleCells.has(`${obs.cx},${obs.cy}`)) {
-            this.obstacleCells.add(`${obs.cx},${obs.cy}`);
-          }
+          this.obstacleCells.add(`${obs.cx},${obs.cy}`);
         } else {
           this.obstacleCells.delete(`${obs.cx},${obs.cy}`);
         }
       }
 
-      // Check dissolution by light proximity
-      const DISSOLVE_DISTANCE = 1.5; // cells
-      const DISSOLVE_TIME = 2000; // ms to dissolve
-
+      const DISSOLVE_DISTANCE = 1.5;
+      const DISSOLVE_TIME = 2000;
       let nearLight = false;
       for (const [, light] of this.lightPositions) {
-        const dist = Math.sqrt(
-          (obs.cx - light.cx) ** 2 + (obs.cy - light.cy) ** 2,
-        );
-        if (dist < DISSOLVE_DISTANCE) {
-          nearLight = true;
-          break;
-        }
+        const dist = Math.sqrt((obs.cx - light.cx) ** 2 + (obs.cy - light.cy) ** 2);
+        if (dist < DISSOLVE_DISTANCE) { nearLight = true; break; }
       }
 
       if (nearLight) {
-        if (obs.dissolveStart === null) {
-          obs.dissolveStart = Date.now();
-        } else if (Date.now() - obs.dissolveStart > DISSOLVE_TIME) {
-          toRemove.push(id);
-        }
+        if (obs.dissolveStart === null) obs.dissolveStart = Date.now();
+        else if (Date.now() - obs.dissolveStart > DISSOLVE_TIME) toRemove.push(id);
       } else {
         obs.dissolveStart = null;
       }
     }
 
-    for (const id of toRemove) {
-      this.remove(id);
-    }
+    for (const id of toRemove) this.remove(id);
   }
 
   render(offsetX: number, offsetY: number): void {
+    const cs = CELL_SIZE;
+    this.shadowGraphics.clear();
     this.graphics.clear();
 
     for (const [, obs] of this.obstacles) {
-      const px = offsetX + obs.cx * CELL_SIZE;
-      const py = offsetY + obs.cy * CELL_SIZE;
+      const px = offsetX + obs.cx * cs;
+      const py = offsetY + obs.cy * cs;
 
-      // Dissolution animation
       let alpha = 1;
       if (obs.dissolveStart) {
-        const dissolveProgress = Math.min(1, (Date.now() - obs.dissolveStart) / 2000);
-        alpha = 1 - dissolveProgress;
-        // Pulsing effect
-        alpha *= 0.5 + 0.5 * Math.sin(Date.now() / 100);
+        const dp = Math.min(1, (Date.now() - obs.dissolveStart) / 2000);
+        alpha = (1 - dp) * (0.5 + 0.5 * Math.sin(Date.now() / 80));
+      }
+      if (obs.type === 'blinker' && !obs.blinkOn) alpha *= 0.15;
+
+      const m = 2; // margin
+
+      // Drop shadow
+      this.shadowGraphics.fillStyle(0x000000, alpha * 0.35);
+      this.shadowGraphics.fillRoundedRect(px + m + 3, py + m + 3, cs - m * 2, cs - m * 2, 4);
+
+      // Base block — darker tinted
+      let baseColor: number;
+      let topColor: number;
+      let sideColor: number;
+      if (obs.type === 'tower') {
+        baseColor = 0x5a3520; topColor = 0x8b5530; sideColor = 0x3a1a08;
+      } else if (obs.type === 'blinker') {
+        baseColor = 0x3a3a5a; topColor = 0x5a5a8a; sideColor = 0x2a2a3a;
+      } else {
+        baseColor = 0x2a2a3a; topColor = 0x4a4a5a; sideColor = 0x1a1a28;
       }
 
-      // Blinker off
-      if (obs.type === 'blinker' && !obs.blinkOn) {
-        alpha *= 0.2;
-      }
+      // Side (bottom + right) — gives 3D depth
+      this.graphics.fillStyle(sideColor, alpha);
+      this.graphics.fillRoundedRect(px + m + 2, py + m + 2, cs - m * 2, cs - m * 2, 4);
 
-      // Base block
-      const color = obs.type === 'tower' ? 0x8b4513 : obs.type === 'blinker' ? 0x4a4a6a : 0x3a3a4a;
-
-      this.graphics.fillStyle(color, alpha);
-      this.graphics.fillRect(px + 1, py + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+      // Main face
+      this.graphics.fillStyle(baseColor, alpha);
+      this.graphics.fillRoundedRect(px + m, py + m, cs - m * 2, cs - m * 2, 4);
 
       // Top edge highlight
-      this.graphics.fillStyle(0xffffff, alpha * 0.15);
-      this.graphics.fillRect(px + 1, py + 1, CELL_SIZE - 2, 3);
+      this.graphics.fillStyle(topColor, alpha * 0.6);
+      this.graphics.fillRect(px + m + 2, py + m, cs - m * 2 - 4, 3);
 
-      // Type indicator for towers (slightly taller visual)
+      // Left edge highlight
+      this.graphics.fillStyle(topColor, alpha * 0.2);
+      this.graphics.fillRect(px + m, py + m + 3, 2, cs - m * 2 - 6);
+
+      // Inner cross pattern for towers
       if (obs.type === 'tower') {
-        this.graphics.fillStyle(0x5a3010, alpha);
-        this.graphics.fillRect(px + 4, py + 4, CELL_SIZE - 8, CELL_SIZE - 8);
+        this.graphics.lineStyle(1, 0x8b6540, alpha * 0.4);
+        const inner = cs / 2;
+        this.graphics.lineBetween(px + inner, py + m + 4, px + inner, py + cs - m - 4);
+        this.graphics.lineBetween(px + m + 4, py + inner, px + cs - m - 4, py + inner);
       }
+
+      // Blinker indicator
+      if (obs.type === 'blinker' && obs.blinkOn) {
+        const t = Date.now() / 1000;
+        const blinkAlpha = (0.3 + Math.sin(t * 6) * 0.2) * alpha;
+        this.graphics.fillStyle(0x8888ff, blinkAlpha);
+        this.graphics.fillCircle(px + cs / 2, py + cs / 2, 4);
+      }
+
+      // Thin border
+      this.graphics.lineStyle(1, 0x666688, alpha * 0.25);
+      this.graphics.strokeRoundedRect(px + m, py + m, cs - m * 2, cs - m * 2, 4);
 
       // Dissolve progress bar
       if (obs.dissolveStart) {
-        const dissolveProgress = Math.min(1, (Date.now() - obs.dissolveStart) / 2000);
-        this.graphics.fillStyle(0xff4444, 0.8);
-        this.graphics.fillRect(px + 2, py + CELL_SIZE - 4, (CELL_SIZE - 4) * dissolveProgress, 2);
+        const dp = Math.min(1, (Date.now() - obs.dissolveStart) / 2000);
+        this.graphics.fillStyle(0xff4444, alpha * 0.8);
+        this.graphics.fillRoundedRect(px + m + 2, py + cs - m - 5, (cs - m * 2 - 4) * dp, 3, 1);
       }
     }
   }
@@ -182,6 +191,7 @@ export class ObstacleSystem {
 
   destroy(): void {
     this.graphics.destroy();
+    this.shadowGraphics.destroy();
     this.obstacles.clear();
     this.obstacleCells.clear();
   }

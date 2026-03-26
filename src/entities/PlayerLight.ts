@@ -1,17 +1,15 @@
 import Phaser from 'phaser';
-import { CELL_SIZE, PLAYER_COLORS } from '../config';
-import { LightSystem } from '../systems/LightSystem';
+import { CELL_SIZE } from '../config';
 
 export class PlayerLight {
   container: Phaser.GameObjects.Container;
-  glow: Phaser.GameObjects.Graphics;
-  core: Phaser.GameObjects.Arc;
+  private glowGraphics: Phaser.GameObjects.Graphics;
+  private coreGraphics: Phaser.GameObjects.Graphics;
   id: string;
   color: number;
   lightRadius: number;
   lightSpeed: number;
 
-  // World position (center of the light)
   wx: number = 0;
   wy: number = 0;
 
@@ -26,14 +24,16 @@ export class PlayerLight {
   private sprinting = false;
   private sprintEnergy = 100;
   private readonly SPRINT_MAX = 100;
-  private readonly SPRINT_COST = 40; // per second
-  private readonly SPRINT_REGEN = 15; // per second
+  private readonly SPRINT_COST = 40;
+  private readonly SPRINT_REGEN = 15;
   private readonly SPRINT_MULT = 1.8;
 
-  // Illuminated cells for rendering
+  // Visual
+  private pulsePhase: number;
+  private label: Phaser.GameObjects.Text | null = null;
+
   illuminatedCells: Set<string> = new Set();
 
-  // Obstacle placement
   obstacleBudget: number;
   lastPlacementTime: number = 0;
 
@@ -51,17 +51,30 @@ export class PlayerLight {
     this.lightRadius = lightRadius;
     this.lightSpeed = lightSpeed;
     this.obstacleBudget = obstacleBudget;
+    this.pulsePhase = Math.random() * Math.PI * 2;
 
-    // Glow effect
-    this.glow = scene.add.graphics();
-    this.glow.setDepth(3);
+    this.glowGraphics = scene.add.graphics();
+    this.glowGraphics.setDepth(3);
 
-    // Core circle
-    this.core = scene.add.circle(0, 0, 8, color);
-    this.core.setStrokeStyle(2, 0xffffff, 0.6);
-    this.core.setDepth(6);
+    this.coreGraphics = scene.add.graphics();
+    this.coreGraphics.setDepth(7);
 
-    this.container = scene.add.container(0, 0, [this.glow, this.core]);
+    this.container = scene.add.container(0, 0, [this.glowGraphics, this.coreGraphics]);
+
+    // Player label
+    if (isPlayer) {
+      this.label = scene.add.text(0, -18, 'YOU', {
+        fontFamily: 'monospace',
+        fontSize: '10px',
+        color: '#ffffff',
+      }).setOrigin(0.5).setAlpha(0.5).setDepth(7);
+    } else {
+      this.label = scene.add.text(0, -18, id.toUpperCase(), {
+        fontFamily: 'monospace',
+        fontSize: '9px',
+        color: '#aaaaaa',
+      }).setOrigin(0.5).setAlpha(0.4).setDepth(7);
+    }
 
     if (isPlayer) {
       this.cursors = scene.input.keyboard!.createCursorKeys();
@@ -79,32 +92,27 @@ export class PlayerLight {
     this.wx = wx;
     this.wy = wy;
     this.container.setPosition(wx, wy);
+    if (this.label) this.label.setPosition(wx, wy - 20);
   }
 
   update(delta: number, gridWidth: number, gridHeight: number, offsetX: number, offsetY: number): void {
-    // For player: read keyboard input (resets moveX/Y)
-    // For bots: moveX/Y were set by BotAI via setMoveInput(), keep them
     if (this.cursors) {
       this.moveX = 0;
       this.moveY = 0;
-
       if (this.cursors.left.isDown || this.wasd!.A.isDown) this.moveX = -1;
       if (this.cursors.right.isDown || this.wasd!.D.isDown) this.moveX = 1;
       if (this.cursors.up.isDown || this.wasd!.W.isDown) this.moveY = -1;
       if (this.cursors.down.isDown || this.wasd!.S.isDown) this.moveY = 1;
     }
 
-    // Normalize diagonal movement
     if (this.moveX !== 0 && this.moveY !== 0) {
       const norm = 1 / Math.sqrt(2);
       this.moveX *= norm;
       this.moveY *= norm;
     }
 
-    // Apply movement
     let speed = this.lightSpeed * (delta / 1000);
 
-    // Sprint logic (player only)
     if (this.shiftKey) {
       this.sprinting = this.shiftKey.isDown && this.sprintEnergy > 0 && (this.moveX !== 0 || this.moveY !== 0);
       if (this.sprinting) {
@@ -114,10 +122,10 @@ export class PlayerLight {
         this.sprintEnergy = Math.min(this.SPRINT_MAX, this.sprintEnergy + this.SPRINT_REGEN * (delta / 1000));
       }
     }
+
     this.wx += this.moveX * speed;
     this.wy += this.moveY * speed;
 
-    // Clamp to grid bounds
     const minX = offsetX;
     const maxX = offsetX + gridWidth * CELL_SIZE;
     const minY = offsetY;
@@ -127,38 +135,71 @@ export class PlayerLight {
     this.wy = Phaser.Math.Clamp(this.wy, minY, maxY);
 
     this.container.setPosition(this.wx, this.wy);
+    if (this.label) this.label.setPosition(this.wx, this.wy - 20);
   }
 
   renderGlow(): void {
-    this.glow.clear();
+    const g = this.glowGraphics;
+    g.clear();
     const r = (this.color >> 16) & 0xff;
-    const g = (this.color >> 8) & 0xff;
+    const gb = (this.color >> 8) & 0xff;
     const b = this.color & 0xff;
 
-    // Outer glow
-    const radiusPx = this.lightRadius * CELL_SIZE;
-    this.glow.fillGradientStyle(
-      Phaser.Display.Color.GetColor(r, g, b), Phaser.Display.Color.GetColor(r, g, b),
-      Phaser.Display.Color.GetColor(r, g, b), Phaser.Display.Color.GetColor(r, g, b),
-      0.06, 0.06, 0.06, 0.06,
-    );
-    this.glow.fillCircle(0, 0, radiusPx);
+    const t = Date.now() / 1000;
+    this.pulsePhase += 0.03;
+    const pulse = 1 + Math.sin(this.pulsePhase) * 0.08;
+    const radiusPx = this.lightRadius * CELL_SIZE * pulse;
 
-    // Inner glow
-    this.glow.fillGradientStyle(
-      Phaser.Display.Color.GetColor(r, g, b), Phaser.Display.Color.GetColor(r, g, b),
-      Phaser.Display.Color.GetColor(r, g, b), Phaser.Display.Color.GetColor(r, g, b),
-      0.15, 0.15, 0.15, 0.15,
-    );
-    this.glow.fillCircle(0, 0, radiusPx * 0.6);
+    // Layer 1: Wide ambient halo
+    g.fillStyle(Phaser.Display.Color.GetColor(r, gb, b), 0.03);
+    g.fillCircle(0, 0, radiusPx * 1.15);
 
-    // Core glow
-    this.glow.fillGradientStyle(
-      Phaser.Display.Color.GetColor(255, 255, 255), Phaser.Display.Color.GetColor(255, 255, 255),
-      Phaser.Display.Color.GetColor(r, g, b), Phaser.Display.Color.GetColor(r, g, b),
-      0.3, 0.3, 0.1, 0.1,
-    );
-    this.glow.fillCircle(0, 0, radiusPx * 0.15);
+    // Layer 2: Main glow
+    g.fillStyle(Phaser.Display.Color.GetColor(r, gb, b), 0.05);
+    g.fillCircle(0, 0, radiusPx * 0.85);
+
+    // Layer 3: Bright inner zone
+    g.fillStyle(Phaser.Display.Color.GetColor(r, gb, b), 0.1);
+    g.fillCircle(0, 0, radiusPx * 0.5);
+
+    // Layer 4: Hot core
+    g.fillStyle(Phaser.Display.Color.GetColor(
+      Math.min(255, r + 80), Math.min(255, gb + 80), Math.min(255, b + 80),
+    ), 0.15);
+    g.fillCircle(0, 0, radiusPx * 0.2);
+
+    // ── Core orb ──
+    const c = this.coreGraphics;
+    c.clear();
+
+    // Sprint trail effect
+    if (this.sprinting) {
+      c.fillStyle(Phaser.Display.Color.GetColor(r, gb, b), 0.15);
+      c.fillCircle(
+        -this.moveX * 6 - this.moveY * 3,
+        -this.moveY * 6 + this.moveX * 3,
+        10,
+      );
+      c.fillCircle(
+        -this.moveX * 12 - this.moveY * 5,
+        -this.moveY * 12 + this.moveX * 5,
+        6,
+      );
+    }
+
+    // Outer ring
+    c.lineStyle(1.5, Phaser.Display.Color.GetColor(r, gb, b), 0.4);
+    c.strokeCircle(0, 0, 10);
+
+    // Core fill — bright center
+    c.fillStyle(Phaser.Display.Color.GetColor(
+      Math.min(255, r + 120), Math.min(255, gb + 120), Math.min(255, b + 120),
+    ), 0.9);
+    c.fillCircle(0, 0, 6);
+
+    // White hot center
+    c.fillStyle(0xffffff, 0.7);
+    c.fillCircle(0, 0, 3);
   }
 
   getGridPosition(offsetX: number, offsetY: number): { cx: number; cy: number } {
@@ -179,6 +220,7 @@ export class PlayerLight {
   }
 
   destroy(): void {
+    if (this.label) this.label.destroy();
     this.container.destroy();
   }
 }

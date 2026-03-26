@@ -10,7 +10,10 @@ export class CellData {
 
 export class GridSystem {
   private cells: CellData[][] = [];
-  private graphics: Phaser.GameObjects.Graphics;
+  private bgGraphics: Phaser.GameObjects.Graphics;
+  private cellGraphics: Phaser.GameObjects.Graphics;
+  private glowGraphics: Phaser.GameObjects.Graphics;
+  private borderGraphics: Phaser.GameObjects.Graphics;
   width: number;
   height: number;
 
@@ -20,6 +23,9 @@ export class GridSystem {
 
   // Contested cells (illuminated by 2+ players)
   contestedCells: Set<string> = new Set();
+
+  // Background star field
+  private stars: { x: number; y: number; brightness: number; speed: number }[] = [];
 
   constructor(
     private scene: Phaser.Scene,
@@ -38,8 +44,47 @@ export class GridSystem {
       }
     }
 
-    this.graphics = scene.add.graphics();
-    this.graphics.setDepth(1);
+    // Generate subtle background stars
+    const totalPx = mapWidth * CELL_SIZE;
+    const totalPy = mapHeight * CELL_SIZE;
+    for (let i = 0; i < 60; i++) {
+      this.stars.push({
+        x: Math.random() * totalPx,
+        y: Math.random() * totalPy,
+        brightness: 0.03 + Math.random() * 0.06,
+        speed: 0.5 + Math.random() * 1.5,
+      });
+    }
+
+    // Layers: bg → cells → borders → glow
+    this.bgGraphics = scene.add.graphics();
+    this.bgGraphics.setDepth(0);
+    this.cellGraphics = scene.add.graphics();
+    this.cellGraphics.setDepth(1);
+    this.borderGraphics = scene.add.graphics();
+    this.borderGraphics.setDepth(2);
+    this.glowGraphics = scene.add.graphics();
+    this.glowGraphics.setDepth(3);
+
+    // Render static background once
+    this.renderBackground(offsetX, offsetY);
+  }
+
+  private renderBackground(offsetX: number, offsetY: number): void {
+    const w = this.width * CELL_SIZE;
+    const h = this.height * CELL_SIZE;
+
+    // Base fill
+    this.bgGraphics.fillStyle(0x08080e, 1);
+    this.bgGraphics.fillRect(offsetX, offsetY, w, h);
+
+    // Subtle noise pattern — random dim dots
+    for (let i = 0; i < 200; i++) {
+      const nx = offsetX + Math.random() * w;
+      const ny = offsetY + Math.random() * h;
+      this.bgGraphics.fillStyle(0x161625, 0.3 + Math.random() * 0.3);
+      this.bgGraphics.fillRect(Math.floor(nx), Math.floor(ny), 1, 1);
+    }
   }
 
   getCell(cx: number, cy: number): CellData | null {
@@ -64,54 +109,32 @@ export class GridSystem {
     return obstacles.has(`${cx},${cy}`);
   }
 
-  /**
-   * Line-of-sight check using DDA (Digital Differential Analyzer).
-   * Returns true if there's a clear path from (x0,y0) to (x1,y1) on the grid.
-   */
   hasLineOfSight(x0: number, y0: number, x1: number, y1: number, obstacles: Set<string>): boolean {
     const dx = Math.abs(x1 - x0);
     const dy = Math.abs(y1 - y0);
     const sx = x0 < x1 ? 1 : -1;
     const sy = y0 < y1 ? 1 : -1;
     let err = dx - dy;
-
     let cx = x0;
     let cy = y0;
 
     while (cx !== x1 || cy !== y1) {
       const e2 = 2 * err;
-
-      // Step in X
-      if (e2 > -dy) {
-        err -= dy;
-        cx += sx;
-      }
-      // Step in Y
-      if (e2 < dx) {
-        err += dx;
-        cy += sy;
-      }
-
-      // Skip the start cell (light source cell)
+      if (e2 > -dy) { err -= dy; cx += sx; }
+      if (e2 < dx) { err += dx; cy += sy; }
       if (cx === x0 && cy === y0) continue;
-      // Skip the target cell (we want to know if we can illuminate it)
       if (cx === x1 && cy === y1) break;
-
-      if (this.isBlocked(cx, cy, obstacles)) {
-        return false;
-      }
+      if (this.isBlocked(cx, cy, obstacles)) return false;
     }
-
     return true;
   }
 
   update(delta: number): void {
-    // Update cell states based on progress
     for (let y = 0; y < this.height; y++) {
       for (let x = 0; x < this.width; x++) {
         const cell = this.cells[y][x];
         if (cell.state === CELL_STATE.CLAIMING && cell.ownerId) {
-          cell.progress += delta / 300; // claimTime normalized
+          cell.progress += delta / 300;
           if (cell.progress >= 1) {
             cell.progress = 1;
             cell.state = CELL_STATE.OWNED;
@@ -124,7 +147,7 @@ export class GridSystem {
             }
           }
         } else if (cell.state === CELL_STATE.DECAYING) {
-          cell.progress -= delta / 500; // decayTime normalized
+          cell.progress -= delta / 500;
           if (cell.progress <= 0) {
             if (this.onCellDecayed && cell.ownerId) {
               this.onCellDecayed(
@@ -144,71 +167,125 @@ export class GridSystem {
   }
 
   render(offsetX: number, offsetY: number, illuminatedCells: Map<string, Set<string>>): void {
-    this.graphics.clear();
     const t = Date.now() / 1000;
+    const cs = CELL_SIZE;
+    const inset = 1;
 
-    // Pass 1: Draw cell backgrounds
+    // ── Pass 1: Cell fills ──
+    this.cellGraphics.clear();
+
     for (let y = 0; y < this.height; y++) {
       for (let x = 0; x < this.width; x++) {
         const cell = this.cells[y][x];
-        const px = offsetX + x * CELL_SIZE;
-        const py = offsetY + y * CELL_SIZE;
+        const px = offsetX + x * cs;
+        const py = offsetY + y * cs;
         const key = `${x},${y}`;
 
-        if (this.contestedCells.has(key) && cell.state === CELL_STATE.NEUTRAL) {
-          // Contested neutral zone — soft flicker, no player color
-          const flicker = 0.12 + Math.sin(t * 4 + x * 0.5 + y * 0.3) * 0.06;
-          this.graphics.fillStyle(0x888899, flicker);
-          this.graphics.fillRect(px, py, CELL_SIZE, CELL_SIZE);
-        } else if (cell.state === CELL_STATE.NEUTRAL) {
-          this.graphics.fillStyle(0x0e0e16, 1);
-          this.graphics.fillRect(px, py, CELL_SIZE, CELL_SIZE);
+        if (cell.state === CELL_STATE.NEUTRAL) {
+          if (this.contestedCells.has(key)) {
+            // Contested zone — shimmer
+            const flicker = 0.08 + Math.sin(t * 5 + x * 0.7 + y * 0.5) * 0.04;
+            this.cellGraphics.fillStyle(0x99aacc, flicker);
+            this.cellGraphics.fillRect(px, py, cs, cs);
+          }
+          // else: already drawn by bgGraphics
         } else {
           const color = PLAYER_COLORS[cell.ownerId!] || 0x444444;
-          const alpha = cell.state === CELL_STATE.CLAIMING
-            ? 0.15 + cell.progress * 0.55
-            : cell.state === CELL_STATE.DECAYING
-              ? Math.max(0.05, cell.progress * 0.7)
-              : 0.7;
+          const cr = (color >> 16) & 0xff;
+          const cg = (color >> 8) & 0xff;
+          const cb = color & 0xff;
 
-          this.graphics.fillStyle(color, alpha);
-          this.graphics.fillRect(px, py, CELL_SIZE, CELL_SIZE);
+          // Darken color for base fill
+          const baseAlpha = cell.state === CELL_STATE.CLAIMING
+            ? 0.2 + cell.progress * 0.45
+            : cell.state === CELL_STATE.DECAYING
+              ? Math.max(0.05, cell.progress * 0.55)
+              : 0.65;
+
+          this.cellGraphics.fillStyle(Phaser.Display.Color.GetColor(
+            Math.floor(cr * 0.4), Math.floor(cg * 0.4), Math.floor(cb * 0.4),
+          ), baseAlpha);
+          this.cellGraphics.fillRect(px, py, cs, cs);
+
+          // Inner lighter core — gives depth
+          const innerAlpha = baseAlpha * 0.35;
+          this.cellGraphics.fillStyle(Phaser.Display.Color.GetColor(cr, cg, cb), innerAlpha);
+          this.cellGraphics.fillRect(px + 3, py + 3, cs - 6, cs - 6);
         }
       }
     }
 
-    // Pass 2: Subtle grid lines
-    this.graphics.lineStyle(1, 0x1a1a2e, 0.25);
+    // ── Pass 2: Territory border edges ──
+    this.borderGraphics.clear();
+
+    for (let y = 0; y < this.height; y++) {
+      for (let x = 0; x < this.width; x++) {
+        const cell = this.cells[y][x];
+        if (cell.state === CELL_STATE.NEUTRAL) continue;
+
+        const color = PLAYER_COLORS[cell.ownerId!] || 0x444444;
+        const px = offsetX + x * cs;
+        const py = offsetY + y * cs;
+        const alpha = cell.state === CELL_STATE.DECAYING
+          ? cell.progress * 0.5
+          : 0.45;
+
+        // Draw bright edge only where territory meets neutral/other
+        const dirs: [number, number, number, number, number, number][] = [
+          [0, -1, px, py, px + cs, py],           // top
+          [0, 1, px, py + cs, px + cs, py + cs],   // bottom
+          [-1, 0, px, py, px, py + cs],             // left
+          [1, 0, px + cs, py, px + cs, py + cs],   // right
+        ];
+
+        for (const [dx, dy, x1, y1, x2, y2] of dirs) {
+          const neighbor = this.getCell(x + dx, y + dy);
+          if (!neighbor || neighbor.ownerId !== cell.ownerId || neighbor.state === CELL_STATE.NEUTRAL) {
+            this.borderGraphics.lineStyle(1.5, color, alpha);
+            this.borderGraphics.lineBetween(x1, y1, x2, y2);
+          }
+        }
+      }
+    }
+
+    // ── Pass 3: Grid lines (very subtle) ──
+    this.borderGraphics.lineStyle(1, 0x161622, 0.2);
     for (let y = 0; y <= this.height; y++) {
-      this.graphics.lineBetween(
-        offsetX, offsetY + y * CELL_SIZE,
-        offsetX + this.width * CELL_SIZE, offsetY + y * CELL_SIZE,
+      this.borderGraphics.lineBetween(
+        offsetX, offsetY + y * cs,
+        offsetX + this.width * cs, offsetY + y * cs,
       );
     }
     for (let x = 0; x <= this.width; x++) {
-      this.graphics.lineBetween(
-        offsetX + x * CELL_SIZE, offsetY,
-        offsetX + x * CELL_SIZE, offsetY + this.height * CELL_SIZE,
+      this.borderGraphics.lineBetween(
+        offsetX + x * cs, offsetY,
+        offsetX + x * cs, offsetY + this.height * cs,
       );
     }
 
-    // Pass 3: Illumination glow — SKIP contested cells (no additive stacking)
-    this.graphics.setBlendMode(Phaser.BlendModes.ADD);
+    // ── Pass 4: Light glow overlay (additive, no contested) ──
+    this.glowGraphics.clear();
+    this.glowGraphics.setBlendMode(Phaser.BlendModes.ADD);
+
     for (const [ownerId, cells] of illuminatedCells) {
       const color = PLAYER_COLORS[ownerId] || 0xffd700;
       const r = (color >> 16) & 0xff;
       const g = (color >> 8) & 0xff;
       const b = color & 0xff;
-      this.graphics.fillStyle(Phaser.Display.Color.GetColor(r, g, b), 0.06);
+
       for (const key of cells) {
-        if (this.contestedCells.has(key)) continue; // No glow on contested
+        if (this.contestedCells.has(key)) continue;
         const [cx, cy] = key.split(',').map(Number);
-        const px = offsetX + cx * CELL_SIZE;
-        const py = offsetY + cy * CELL_SIZE;
-        this.graphics.fillRect(px, py, CELL_SIZE, CELL_SIZE);
+        const px = offsetX + cx * cs;
+        const py = offsetY + cy * cs;
+
+        // Soft light tint
+        this.glowGraphics.fillStyle(Phaser.Display.Color.GetColor(r, g, b), 0.04);
+        this.glowGraphics.fillRect(px, py, cs, cs);
       }
     }
-    this.graphics.setBlendMode(Phaser.BlendModes.NORMAL);
+
+    this.glowGraphics.setBlendMode(Phaser.BlendModes.NORMAL);
   }
 
   getStats(): Map<string, number> {
@@ -230,6 +307,9 @@ export class GridSystem {
   }
 
   destroy(): void {
-    this.graphics.destroy();
+    this.bgGraphics.destroy();
+    this.cellGraphics.destroy();
+    this.borderGraphics.destroy();
+    this.glowGraphics.destroy();
   }
 }

@@ -335,10 +335,17 @@ export class GameScene extends Phaser.Scene {
     const py = this.offsetY + cy * CELL_SIZE;
 
     if (cx >= 0 && cx < this.config.mapWidth && cy >= 0 && cy < this.config.mapHeight) {
-      this.placementPreview.fillStyle(canPlace ? 0x44ff44 : 0xff4444, 0.3);
-      this.placementPreview.fillRect(px, py, CELL_SIZE, CELL_SIZE);
-      this.placementPreview.lineStyle(2, canPlace ? 0x44ff44 : 0xff4444, 0.8);
-      this.placementPreview.strokeRect(px + 1, py + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+      // Shadow
+      this.placementPreview.fillStyle(0x000000, 0.3);
+      this.placementPreview.fillRoundedRect(px + 3, py + 3, CELL_SIZE, CELL_SIZE, 4);
+
+      // Preview block
+      this.placementPreview.fillStyle(canPlace ? 0x2a2a4a : 0x4a1a1a, 0.7);
+      this.placementPreview.fillRoundedRect(px + 1, py + 1, CELL_SIZE - 2, CELL_SIZE - 2, 4);
+
+      // Border
+      this.placementPreview.lineStyle(1.5, canPlace ? 0x44ff88 : 0xff4444, 0.6);
+      this.placementPreview.strokeRoundedRect(px + 1, py + 1, CELL_SIZE - 2, CELL_SIZE - 2, 4);
     }
   }
 
@@ -369,41 +376,85 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
+    const isPlayerWin = winner === 'player';
+
     // Show result overlay
+    const cx = this.scale.width / 2;
+    const cy = this.scale.height / 2;
+
     const overlay = this.add.graphics();
     overlay.setDepth(200);
-    overlay.fillStyle(0x000000, 0.7);
+    overlay.fillStyle(0x050508, 0.85);
     overlay.fillRect(0, 0, this.scale.width, this.scale.height);
 
-    const isPlayerWin = winner === 'player';
-    const color = isPlayerWin ? '#ffd700' : '#ff4444';
-    const title = isPlayerWin ? '⭐ VICTORY! ⭐' : 'DEFEATED';
-    const sub = winner === 'player' ? 'Your light shines brightest!' : `${winner} dominates the field`;
+    // Result panel background
+    const panelW = 360;
+    const panelH = 220;
+    const panelX = cx - panelW / 2;
+    const panelY = cy - panelH / 2;
 
-    const titleText = this.add.text(this.scale.width / 2, this.scale.height / 2 - 40, title, {
+    const panel = this.add.graphics().setDepth(201);
+    panel.fillStyle(0x0c0c18, 0.95);
+    panel.fillRoundedRect(panelX, panelY, panelW, panelH, 12);
+    panel.lineStyle(1, isPlayerWin ? 0xffd700 : 0xff4444, 0.3);
+    panel.strokeRoundedRect(panelX, panelY, panelW, panelH, 12);
+
+    // Title
+    // Title
+    const title = isPlayerWin ? 'VICTORY' : 'DEFEATED';
+    const sub = winner === 'player'
+      ? 'Your light shines brightest'
+      : `${winner === 'Nobody' ? 'Nobody' : winner.toUpperCase()} dominates`;
+
+    // Title glow
+    if (isPlayerWin) {
+      this.add.text(cx + 1, cy - 60 + 1, title, {
+        fontFamily: 'monospace',
+        fontSize: '38px',
+        color: '#ff8800',
+        fontStyle: 'bold',
+      }).setOrigin(0.5).setAlpha(0.2).setDepth(202);
+    }
+
+    this.add.text(cx, cy - 60, title, {
       fontFamily: 'monospace',
-      fontSize: '36px',
-      color: color,
+      fontSize: '38px',
+      color: isPlayerWin ? '#ffd700' : '#ff4444',
       fontStyle: 'bold',
-    }).setOrigin(0.5).setDepth(201);
+    }).setOrigin(0.5).setDepth(203);
 
-    this.add.text(this.scale.width / 2, this.scale.height / 2 + 10, sub, {
+    this.add.text(cx, cy - 18, sub, {
       fontFamily: 'monospace',
-      fontSize: '18px',
-      color: '#cccccc',
-    }).setOrigin(0.5).setDepth(201);
+      fontSize: '15px',
+      color: '#8888aa',
+    }).setOrigin(0.5).setDepth(203);
 
-    const restartText = this.add.text(this.scale.width / 2, this.scale.height / 2 + 60, 'Press R to restart', {
-      fontFamily: 'monospace',
-      fontSize: '16px',
-      color: '#888888',
-    }).setOrigin(0.5).setDepth(201);
+    // Final scores
+    const total = this.grid.getTotalCells();
+    let scoreY = cy + 14;
+    for (const [id, count] of stats) {
+      const pct = ((count / total) * 100).toFixed(1);
+      const colorHex = '#' + (PLAYER_COLORS[id] || 0xffffff).toString(16).padStart(6, '0');
+      const label = id === 'player' ? 'YOU' : id.toUpperCase();
 
-    this.add.text(this.scale.width / 2, this.scale.height / 2 + 90, 'Press ESC for menu', {
+      this.add.circle(panelX + 30, scoreY + 7, 4, PLAYER_COLORS[id] || 0xffffff)
+        .setDepth(203);
+
+      this.add.text(panelX + 42, scoreY, `${label}  ${count}  (${pct}%)`, {
+        fontFamily: 'monospace',
+        fontSize: '13px',
+        color: colorHex,
+      }).setDepth(203);
+
+      scoreY += 22;
+    }
+
+    // Actions
+    this.add.text(cx, cy + panelH / 2 - 42, '[R] Restart     [ESC] Menu', {
       fontFamily: 'monospace',
-      fontSize: '14px',
-      color: '#666666',
-    }).setOrigin(0.5).setDepth(201);
+      fontSize: '13px',
+      color: '#555577',
+    }).setOrigin(0.5).setDepth(203);
 
     // Restart key
     this.input.keyboard!.once('keydown-R', () => {
