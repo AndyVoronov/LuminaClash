@@ -11,6 +11,7 @@ import {
 } from '../config';
 import { MAP_TEMPLATE_LABELS } from '../systems/MapGenerator';
 import { AudioManager } from '../audio/AudioManager';
+import { TutorialOverlay } from '../tutorial/TutorialOverlay';
 
 interface MenuParticle {
   x: number;
@@ -211,8 +212,41 @@ export class MenuScene extends Phaser.Scene {
       this.scene.start('CampaignScene');
     });
 
+    // How to Play button
+    const howW = 260;
+    const howH = 46;
+    const howX = cx - howW / 2;
+    const howY = campY + campH + 16;
+
+    const howBg = this.add.graphics().setDepth(4);
+    this.track(howBg);
+    this.renderButton(howBg, howX, howY, howW, howH, false);
+
+    const howText = this.add.text(cx, howY + howH / 2, 'HOW TO PLAY', {
+      fontFamily: 'monospace', fontSize: '16px', color: '#ccccdd', letterSpacing: 4,
+    }).setOrigin(0.5).setDepth(5);
+    this.track(howText);
+
+    const howZone = this.add.zone(cx, howY + howH / 2, howW, howH)
+      .setInteractive({ useHandCursor: true }).setDepth(6);
+    this.track(howZone);
+    howZone.on('pointerover', () => {
+      this.audio.playMenuHover();
+      this.renderButton(howBg, howX, howY, howW, howH, true);
+      howText.setColor('#ffd700');
+    });
+    howZone.on('pointerout', () => {
+      this.renderButton(howBg, howX, howY, howW, howH, false);
+      howText.setColor('#ccccdd');
+    });
+    howZone.on('pointerdown', () => {
+      this.audio.playMenuClick();
+      TutorialOverlay.reset();
+      this.scene.start('GameScene');
+    });
+
     // Controls
-    const ctrlY = campY + campH + 24;
+    const ctrlY = howY + howH + 24;
     this.track(this.add.text(cx, ctrlY, 'CONTROLS', {
       fontFamily: 'monospace', fontSize: '12px', color: '#3a3a55', letterSpacing: 6,
     }).setOrigin(0.5).setDepth(4));

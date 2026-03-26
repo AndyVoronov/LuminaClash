@@ -162,7 +162,7 @@
 
 > Цель: запустить на целевых площадках (Yandex Games, VK Play, CrazyGames, Poki, GameDistribution).
 
-### S01: Touch Controls `risk:high` `depends:[M2/S01]`
+### S01: Touch Controls `risk:high` `depends:[M2/S01]` ✅ DONE
 - Virtual joystick (left thumb) для движения
 - Tap-to-place для препятствий
 - Sprint button (right side)
@@ -170,13 +170,13 @@
 - Адаптивная верстка: portrait и landscape
 - Gesture: двойной tap = спринт (альтернатива кнопке)
 
-### S02: Responsive Scaling `risk:medium` `depends:[M2/S01]`
+### S02: Responsive Scaling `risk:medium` `depends:[M2/S01]` ✅ DONE
 - Phaser Scale Manager: Fit mode с letterboxing
 - Поддержка: 360×640 (мобильный portrait), 768×1024 (tablet), 1920×1080 (desktop)
 - UI elements масштабируются относительно viewport
 - Мини-карта адаптируется к размеру экрана
 
-### S03: Platform SDK Integration `risk:high` `depends:[S01, S02]`
+### S03: Platform SDK Integration `risk:high` `depends:[S01, S02]` ✅ DONE
 - Yandex Games SDK:
   - Auth, advertisements (rewarded = extra time / power-up)
   - Leaderboards (territory %, fastest win)
@@ -188,7 +188,7 @@
   - Gameplay events tracking
 - Build pipeline: единый билд → платформенные обёртки
 
-### S04: Performance Optimization `risk:medium` `depends:[S02]`
+### S04: Performance Optimization `risk:medium` `depends:[S02]` ✅ DONE
 - WebGL fallback (Canvas) для слабых устройств
 - Graphics batching: уменьшить draw calls (текущие 4+ graphics layers = много)
 - Object pooling для частиц
@@ -201,17 +201,17 @@
 
 > Цель: финальная полировка, QA, и публикация.
 
-### S01: Tutorial & Onboarding `risk:low` `depends:[M2]`
+### S01: Tutorial & Onboarding `risk:low` `depends:[M2]` ✅ DONE
 - Interactive tutorial: первые 30 секунд — guided "move here, capture this, place wall here"
 - Tooltip hints в первых 3 матчах
 - "How to Play" экран в меню (с анимированными примерами)
 
-### S02: Localization `risk:low` `depends:[M2]`
+### S02: Localization `risk:low` `depends:[M2]` ✅ DONE
 - i18n система: JSON файлы с переводами
 - Языки: EN, RU (приоритет), UA, DE
 - Перевод всех UI-строк, tutorial текстов, button labels
 
-### S03: QA & Bug Fixes `risk:low` `depends:[]`
+### S03: QA & Bug Fixes `risk:low` `depends:[]` ✅ DONE
 - Edge cases: window resize, tab-switch, memory leaks при scene restart
 - Performance profiling на мобильных устройствах
 - Обновление после каждого major milestone

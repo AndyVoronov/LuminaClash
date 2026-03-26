@@ -14,6 +14,7 @@ import { JuiceSystem } from '../systems/JuiceSystem';
 import { loadSave, writeSave, submitLevelResult, calcStars, checkColorUnlocks } from '../campaign/save';
 import { getLevel, getNextLevelId, CHAPTER_INFO } from '../campaign/levels';
 import { TouchControls } from '../ui/TouchControls';
+import { TutorialOverlay } from '../tutorial/TutorialOverlay';
 
 export class GameScene extends Phaser.Scene {
   private config!: GameConfig;
@@ -31,6 +32,7 @@ export class GameScene extends Phaser.Scene {
   private objectiveText!: Phaser.GameObjects.Text;
   private playerPlacedObstacles = false;
   private touchControls: TouchControls | null = null;
+  private tutorial: TutorialOverlay | null = null;
 
   private offsetX = 0;
   private offsetY = 0;
@@ -220,6 +222,12 @@ export class GameScene extends Phaser.Scene {
     this.placementPreview = this.add.graphics();
     this.placementPreview.setDepth(10);
 
+    // Tutorial (first-time only)
+    this.tutorial = new TutorialOverlay(this);
+    if (!TutorialOverlay.isDone()) {
+      this.tutorial.start();
+    }
+
     // PowerUp bomb callback
     this.powerUps.onBomb = (cx, cy, playerId) => {
       this.audio.playBomb();
@@ -288,6 +296,13 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard!.on('keydown-ESC', () => {
       if (this.winner) return;
       this.togglePause();
+    });
+
+    // Auto-pause on tab/window blur
+    this.game.events.on('hidden', () => {
+      if (this.gameActive && !this.paused && !this.winner) {
+        this.togglePause();
+      }
     });
 
     this.matchStartTime = Date.now();
@@ -487,12 +502,15 @@ export class GameScene extends Phaser.Scene {
       player.lastPlacementTime = Date.now();
       this.audio.playObstaclePlace();
       this.playerPlacedObstacles = true;
+      this.tutorial?.notifyClick();
     }
   }
 
   // ── Main update ──
 
   update(time: number, delta: number): void {
+    // Guard against update after scene destroyed
+    if (!this.gameActive && !this.winner) return;
     if (!this.gameActive || !!this.winner) {
       // Still update juice effects during end-game
       if (this.juice) this.juice.update(delta);
@@ -534,6 +552,14 @@ export class GameScene extends Phaser.Scene {
       const humanPlayer = this.players.find(p => p.id === 'player');
       if (humanPlayer) {
         humanPlayer.update(delta, this.config.mapWidth, this.config.mapHeight, this.offsetX, this.offsetY);
+        // Tutorial: detect movement
+        if (humanPlayer['moveX'] !== 0 || humanPlayer['moveY'] !== 0) {
+          this.tutorial?.notifyMove();
+        }
+        // Tutorial: detect sprint
+        if (humanPlayer['sprinting']) {
+          this.tutorial?.notifySprint();
+        }
       }
 
       // Bot AI + movement
@@ -989,6 +1015,16 @@ export class GameScene extends Phaser.Scene {
         this.scene.start('MenuScene', { lastConfig: this.config });
       }
     });
+  }
+
+  shutdown(): void {
+    // Clean up resources
+    this.touchControls?.destroy();
+    this.touchControls = null;
+    this.tutorial?.destroy();
+    this.tutorial = null;
+    this.cachedIlluminated.clear();
+    this.pauseElements.length = 0;
   }
 
   private startCampaignLevel(levelId: string): void {
