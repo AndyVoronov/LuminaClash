@@ -1,0 +1,20 @@
+{
+  "name": "luminaclash",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LuminaClash — Territory capture game with light and shadows",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "phaser": "^3.87.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.5",
+    "typescript": "^5.7.3",
+    "vite": "^6.2.0"
+  }
+}
