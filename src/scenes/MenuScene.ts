@@ -258,7 +258,7 @@ export class MenuScene extends Phaser.Scene {
     const previewW = 320;
     const previewH = 140;
     const previewX = cx - previewW / 2;
-    const previewY = 400;
+    const previewY = 420;
 
     const previewBg = this.add.graphics().setDepth(4);
     this.track(previewBg);
@@ -350,18 +350,19 @@ export class MenuScene extends Phaser.Scene {
     for (const opt of options) {
       const w = opt.label.length * 10 + 32;
       const selected = opt.value === current;
+      const btnX = bx;
 
       const bg = this.add.graphics().setDepth(4);
       this.track(bg);
-      this.renderOptionBtn(bg, bx, by, w, btnH, selected);
+      this.renderOptionBtn(bg, btnX, by, w, btnH, selected);
 
-      const txt = this.add.text(bx + w / 2, by + btnH / 2, opt.label, {
+      const txt = this.add.text(btnX + w / 2, by + btnH / 2, opt.label, {
         fontFamily: 'monospace', fontSize: '14px',
         color: selected ? '#ffd700' : '#7777aa',
       }).setOrigin(0.5).setDepth(5);
       this.track(txt);
 
-      const zone = this.add.zone(bx + w / 2, by + btnH / 2, w, btnH)
+      const zone = this.add.zone(btnX + w / 2, by + btnH / 2, w, btnH)
         .setInteractive({ useHandCursor: true }).setDepth(6);
       this.track(zone);
 
@@ -369,13 +370,13 @@ export class MenuScene extends Phaser.Scene {
         if (!selected) {
           bg.clear();
           bg.fillStyle(0x1a1a30, 0.8);
-          bg.fillRoundedRect(bx, by, w, btnH, 6);
+          bg.fillRoundedRect(btnX, by, w, btnH, 6);
           txt.setColor('#ccccdd');
         }
       });
       zone.on('pointerout', () => {
         bg.clear();
-        this.renderOptionBtn(bg, bx, by, w, btnH, selected);
+        this.renderOptionBtn(bg, btnX, by, w, btnH, selected);
         txt.setColor(selected ? '#ffd700' : '#7777aa');
       });
       zone.on('pointerdown', () => {
