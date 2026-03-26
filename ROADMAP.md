@@ -105,19 +105,19 @@
 
 > Цель:15 уровней кампании с нарастающей сложностью, уникальными условиями, и meta-progression.
 
-### S01: Level System & Config `risk:low` `depends:[M3/S03]`
+### S01: Level System & Config `risk:low` `depends:[M3/S03]` ✅ DONE
 - Структура уровня: map template, bot configs, objectives, unlock conditions
 - 15 уровней, 5 глав по 3 уровня (с прогрессией сложности внутри главы)
 - Объективы: "Capture 60% territory" / "Survive 90s" / "Destroy all towers" / "Win without placing obstacles"
 - Star rating: 1★ = complete, 2★ = time target, 3★ = performance target (% territory / speed)
 
-### S02: Campaign Flow `risk:low` `depends:[S01]`
+### S02: Campaign Flow `risk:low` `depends:[S01]` ✅ DONE
 - Chapter select screen с star progression
 - Уровни открываются последовательно (пройти предыдущий = открыть следующий)
 - Briefing перед каждым уровнем: текстовое описание, цель, подсказка
 - Victory screen с star animation, XP earned, next level prompt
 
-### S03: Player Progression `risk:low` `depends:[S01]`
+### S03: Player Progression `risk:low` `depends:[S01]` ✅ DONE
 - Persistent save (localStorage):
   - Unlocked levels
   - Stars per level
