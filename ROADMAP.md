@@ -4,23 +4,24 @@
 
 **Что работает:**
 - Ядро геймплея: движение, захват территории, raycasting теней
-- 2 бота с 5-ю AI-состояниями (EXPAND/ATTACK/DEFEND/CLEANSE/RETREAT)
-- Препятствия: wall (рабочий), tower/blinker (визуально есть, dissolve работает)
+- 2-3 бота с 5-ю AI-состояниями (EXPAND/ATTACK/DEFEND/CLEANSE/RETREAT)
+- Все типы препятствий: wall, tower (indestructible, коронка), blinker (warning shimmer), mirror (отражает свет)
 - Контестные зоны (shimmer, нейтральные)
 - Спринт, частицы, мини-карта, glass HUD
 - Визуал: слоистые ячейки, 3D-препятствия, glow-орбы, animated menu
+- Power-ups: speed boost, light expand, shield, bomb, steal (5 типов, timed effects)
+- Game flow: настройки (difficulty/map/duration), пауза, game over с XP
+- Динамические боты (1-3 по сложности Easy/Medium/Hard)
 
 **Что отсутствует или заглушено:**
-- Типы препятствий mirror (не реализован вообще)
-- Меню: нет выбора сложности/кол-ва ботов/карты
+- Меню: нет tutorial
 - Нет звука и музыки
-- Нет паузы
-- Нет сохранения прогресса
-- Нет кампании (только free mode)
-- Нет tutorial
+- Нет сохранения прогресса (localStorage)
 - Нет мобильного ввода
 - Нет онлайна (только local vs bots)
 - Нет leaderboards/achievements
+- Процедурная генерация карт (пока preset layout)
+- Mirror direction player control (пока auto-direction)
 - Интеграция с площадками (Yandex Games SDK, и т.д.) не начата
 
 ---
@@ -57,7 +58,7 @@
 
 > Цель: добавить тактическую глубину — новые типы препятствий, power-ups, особые механики.
 
-### S01: Full Obstacle Types `risk:medium` `depends:[]`
+### S01: Full Obstacle Types `risk:medium` `depends:[]` ✅ DONE
 - **Mirror**: отражает свет (увеличивает эффективный радиус в одном направлении)
   - Позиционируется игроком с выбором направления (4 или 8 направлений)
   - Отражённый свет захватывает территорию как обычно, но через "зеркальный" cone
@@ -70,7 +71,7 @@
   - Когда включен — блокирует свет, когда выключен — проходимый
   - Мигание видно заранее (пред-warning shimmer перед включением)
 
-### S02: Power-ups on Map `risk:medium` `depends:[M2/S01]`
+### S02: Power-ups on Map `risk:medium` `depends:[M2/S01]` ✅ DONE
 - Спавнятся на карте каждые ~15s в случайных нейтральных ячейках
 - Типы:
   - **Speed Boost** (жёлтый) — 3s двойная скорость
