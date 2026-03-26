@@ -122,6 +122,8 @@ export interface GameConfig {
   botReactionDelay: number;
   botSpeedMult: number;
   botRadiusMult: number;
+  /** Campaign level ID (undefined for quick match) */
+  _levelId?: string;
 }
 
 export interface PlayerConfig {

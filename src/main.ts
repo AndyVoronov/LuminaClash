@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { MenuScene } from './scenes/MenuScene';
+import { CampaignScene } from './scenes/CampaignScene';
 import { GameScene } from './scenes/GameScene';
 
 const config: Phaser.Types.Core.GameConfig = {
@@ -17,7 +18,7 @@ const config: Phaser.Types.Core.GameConfig = {
     preserveDrawingBuffer: true,
     antialias: true,
   },
-  scene: [MenuScene, GameScene],
+  scene: [MenuScene, CampaignScene, GameScene],
 };
 
 const game = new Phaser.Game(config);

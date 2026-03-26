@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { CELL_SIZE, CELL_STATE, PLAYER_COLORS, DEFAULT_CONFIG, XP_REWARDS, sessionStats, type GameConfig } from '../config';
+import { CELL_SIZE, CELL_STATE, PLAYER_COLORS, DEFAULT_CONFIG, XP_REWARDS, sessionStats, buildGameConfig, type GameConfig } from '../config';
 import { GridSystem } from '../systems/GridSystem';
 import { LightSystem } from '../systems/LightSystem';
 import { ObstacleSystem } from '../systems/ObstacleSystem';
@@ -11,6 +11,8 @@ import { BotAI } from '../ai/BotAI';
 import { HUD } from '../ui/HUD';
 import { AudioManager } from '../audio/AudioManager';
 import { JuiceSystem } from '../systems/JuiceSystem';
+import { loadSave, writeSave, submitLevelResult, calcStars } from '../campaign/save';
+import { getLevel, getNextLevelId, CHAPTER_INFO } from '../campaign/levels';
 
 export class GameScene extends Phaser.Scene {
   private config!: GameConfig;
@@ -24,6 +26,7 @@ export class GameScene extends Phaser.Scene {
   private hud!: HUD;
   private audio!: AudioManager;
   private juice!: JuiceSystem;
+  private levelId?: string;
 
   private offsetX = 0;
   private offsetY = 0;
@@ -47,8 +50,9 @@ export class GameScene extends Phaser.Scene {
     super({ key: 'GameScene' });
   }
 
-  init(data: { config?: GameConfig }): void {
+  init(data: { config?: GameConfig; levelId?: string }): void {
     this.config = data.config ? { ...DEFAULT_CONFIG, ...data.config } : { ...DEFAULT_CONFIG };
+    this.levelId = data.levelId;
     this.matchTimeLeft = this.config.matchDuration;
     this.matchStartTime = 0;
     this.gameActive = true;
@@ -706,6 +710,19 @@ export class GameScene extends Phaser.Scene {
     sessionStats.matchesPlayed++;
     if (isPlayerWin) sessionStats.wins++;
 
+    // Campaign save
+    let campaignStars = 0;
+    let campaignXP = 0;
+    let campaignNewBest = false;
+    if (this.levelId) {
+      const save = loadSave();
+      const result = submitLevelResult(save, this.levelId, true, timePlayed, playerPct, playerPlacement + 1);
+      campaignStars = result.stars;
+      campaignXP = result.xpEarned;
+      campaignNewBest = result.newBest;
+      if (result.newBest) writeSave(result.save);
+    }
+
     // ── Build overlay ──
     const W = this.scale.width;
     const H = this.scale.height;
@@ -714,7 +731,8 @@ export class GameScene extends Phaser.Scene {
 
     const total = this.grid.getTotalCells();
     const rankingH = rankings.length * 26;
-    const xpSectionH = 70; // XP title + breakdown + session
+    const campaignExtra = this.levelId ? 30 : 0; // stars display
+    const xpSectionH = 70 + campaignExtra; // XP title + breakdown + session + stars
     const buttonsH = 60;   // button row + padding
     const titleH = 70;     // title area
     const padding = 24;    // top + bottom padding
@@ -799,15 +817,43 @@ export class GameScene extends Phaser.Scene {
       fontFamily: 'monospace', fontSize: '11px', color: '#3a3a55',
     }).setOrigin(0.5).setDepth(203);
 
+    // Campaign stars
+    if (this.levelId && campaignStars > 0) {
+      const starsStr = '★'.repeat(campaignStars) + '☆'.repeat(3 - campaignStars);
+      this.add.text(cx, xpY + 64, starsStr, {
+        fontFamily: 'monospace', fontSize: '20px', color: '#ffd700',
+      }).setOrigin(0.5).setDepth(203);
+      if (campaignNewBest) {
+        this.add.text(cx, xpY + 84, campaignStars === 3 ? 'NEW BEST!' : '★ NEW!', {
+          fontFamily: 'monospace', fontSize: '11px', color: '#44ff88', fontStyle: 'bold',
+        }).setOrigin(0.5).setDepth(203);
+      }
+    }
+
     // Buttons
+    const nextLevelId = this.levelId ? getNextLevelId(this.levelId) : null;
+    const hasCampaignNext = !!nextLevelId;
     const btnY = panelY + panelH - buttonsH + 12;
-    const totalBtnW = 150 + 16 + 130 + 16 + 100; // buttons + gaps
-    const btnStartX = cx - totalBtnW / 2;
-    const buttons = [
-      { label: 'Next Match', x: btnStartX + 75, w: 150, action: () => this.scene.restart({ config: this.config }) },
-      { label: 'Settings', x: btnStartX + 150 + 16 + 65, w: 130, action: () => this.scene.start('MenuScene', { lastConfig: this.config }) },
-      { label: 'Menu', x: btnStartX + 150 + 16 + 130 + 16 + 50, w: 100, action: () => this.scene.start('MenuScene') },
-    ];
+
+    // Determine button layout
+    let buttons: { label: string; x: number; w: number; action: () => void }[];
+    if (hasCampaignNext) {
+      const totalBtnW = 130 + 16 + 130 + 16 + 100;
+      const btnStartX = cx - totalBtnW / 2;
+      buttons = [
+        { label: 'Next Level', x: btnStartX + 65, w: 130, action: () => this.startCampaignLevel(nextLevelId!) },
+        { label: 'Retry', x: btnStartX + 130 + 16 + 65, w: 130, action: () => this.scene.restart({ config: this.config, levelId: this.levelId }) },
+        { label: 'Menu', x: btnStartX + 130 + 16 + 130 + 16 + 50, w: 100, action: () => this.scene.start('CampaignScene') },
+      ];
+    } else {
+      const totalBtnW = 150 + 16 + 130 + 16 + 100;
+      const btnStartX = cx - totalBtnW / 2;
+      buttons = [
+        { label: 'Next Match', x: btnStartX + 75, w: 150, action: () => this.scene.restart({ config: this.config }) },
+        { label: 'Settings', x: btnStartX + 150 + 16 + 65, w: 130, action: () => this.scene.start('MenuScene', { lastConfig: this.config }) },
+        { label: 'Menu', x: btnStartX + 150 + 16 + 130 + 16 + 50, w: 100, action: () => this.scene.start('MenuScene') },
+      ];
+    }
 
     for (const btn of buttons) {
       const bh = 38;
@@ -847,10 +893,26 @@ export class GameScene extends Phaser.Scene {
 
     // Keyboard shortcuts (still work)
     this.input.keyboard!.once('keydown-R', () => {
-      this.scene.restart({ config: this.config });
+      if (this.levelId) {
+        this.scene.restart({ config: this.config, levelId: this.levelId });
+      } else {
+        this.scene.restart({ config: this.config });
+      }
     });
     this.input.keyboard!.once('keydown-ESC', () => {
-      this.scene.start('MenuScene', { lastConfig: this.config });
+      if (this.levelId) {
+        this.scene.start('CampaignScene');
+      } else {
+        this.scene.start('MenuScene', { lastConfig: this.config });
+      }
     });
+  }
+
+  private startCampaignLevel(levelId: string): void {
+    const level = getLevel(levelId);
+    if (!level) return;
+    const config = buildGameConfig(level.difficulty, level.mapKey, level.matchDuration, level.mapTemplate, level.mapSeed);
+    config._levelId = levelId;
+    this.scene.start('GameScene', { config, levelId });
   }
 }

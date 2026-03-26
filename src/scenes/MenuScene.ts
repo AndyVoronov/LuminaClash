@@ -179,8 +179,40 @@ export class MenuScene extends Phaser.Scene {
       this.showCurrentScreen();
     });
 
+    // Campaign button
+    const campW = 260;
+    const campH = 46;
+    const campX = cx - campW / 2;
+    const campY = btnY + btnH + 16;
+
+    const campBg = this.add.graphics().setDepth(4);
+    this.track(campBg);
+    this.renderButton(campBg, campX, campY, campW, campH, false);
+
+    const campText = this.add.text(cx, campY + campH / 2, 'CAMPAIGN', {
+      fontFamily: 'monospace', fontSize: '16px', color: '#ccccdd', letterSpacing: 4,
+    }).setOrigin(0.5).setDepth(5);
+    this.track(campText);
+
+    const campZone = this.add.zone(cx, campY + campH / 2, campW, campH)
+      .setInteractive({ useHandCursor: true }).setDepth(6);
+    this.track(campZone);
+    campZone.on('pointerover', () => {
+      this.audio.playMenuHover();
+      this.renderButton(campBg, campX, campY, campW, campH, true);
+      campText.setColor('#ffd700');
+    });
+    campZone.on('pointerout', () => {
+      this.renderButton(campBg, campX, campY, campW, campH, false);
+      campText.setColor('#ccccdd');
+    });
+    campZone.on('pointerdown', () => {
+      this.audio.playMenuClick();
+      this.scene.start('CampaignScene');
+    });
+
     // Controls
-    const ctrlY = 380;
+    const ctrlY = campY + campH + 24;
     this.track(this.add.text(cx, ctrlY, 'CONTROLS', {
       fontFamily: 'monospace', fontSize: '12px', color: '#3a3a55', letterSpacing: 6,
     }).setOrigin(0.5).setDepth(4));
