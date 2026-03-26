@@ -44,11 +44,6 @@ export class LightSystem {
 
   /**
    * Second pass: claim territory for a player, respecting contested cells.
-   *
-   * - Cells illuminated ONLY by this player → get claimed
-   * - Cells in BOTH this player's light AND shadow → decay if owned
-   * - Contested cells (2+ lights overlap) → no claiming, neutral zone
-   * - Cells outside radius entirely → keep current state
    */
   claimTerritory(
     playerId: string,
@@ -57,6 +52,7 @@ export class LightSystem {
     radius: number,
     illuminatedCells: Set<string>,
     contestedCells: Set<string>,
+    shieldedOwnerIds: Set<string> = new Set(),
   ): void {
     const r = Math.ceil(radius);
     const srcX = Math.round(sourceCX);
@@ -95,8 +91,12 @@ export class LightSystem {
           // else: OWNED by us — territory persists
         } else if (!isLit) {
           // ── IN SHADOW: erase territory ──
-          if (cell.state === CELL_STATE.OWNED || cell.state === CELL_STATE.CLAIMING) {
-            cell.state = CELL_STATE.DECAYING;
+          // Shielded players' territory doesn't decay
+          const isShielded = cell.ownerId ? shieldedOwnerIds.has(cell.ownerId) : false;
+          if (!isShielded) {
+            if (cell.state === CELL_STATE.OWNED || cell.state === CELL_STATE.CLAIMING) {
+              cell.state = CELL_STATE.DECAYING;
+            }
           }
         }
         // else: contested or lit-but-contested → do nothing (neutral zone)

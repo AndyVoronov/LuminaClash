@@ -1,9 +1,10 @@
 import Phaser from 'phaser';
-import { CELL_SIZE, PLAYER_COLORS, DEFAULT_CONFIG, XP_REWARDS, sessionStats, type GameConfig } from '../config';
+import { CELL_SIZE, CELL_STATE, PLAYER_COLORS, DEFAULT_CONFIG, XP_REWARDS, sessionStats, type GameConfig } from '../config';
 import { GridSystem } from '../systems/GridSystem';
 import { LightSystem } from '../systems/LightSystem';
 import { ObstacleSystem } from '../systems/ObstacleSystem';
 import { ParticleSystem } from '../systems/ParticleSystem';
+import { PowerUpSystem } from '../systems/PowerUpSystem';
 import { PlayerLight } from '../entities/PlayerLight';
 import { BotAI } from '../ai/BotAI';
 import { HUD } from '../ui/HUD';
@@ -14,6 +15,7 @@ export class GameScene extends Phaser.Scene {
   private lightSystem!: LightSystem;
   private obstacleSystem!: ObstacleSystem;
   private particles!: ParticleSystem;
+  private powerUps!: PowerUpSystem;
   private players: PlayerLight[] = [];
   private botAIs: BotAI[] = [];
   private hud!: HUD;
@@ -62,6 +64,7 @@ export class GameScene extends Phaser.Scene {
     this.grid = new GridSystem(this, this.config.mapWidth, this.config.mapHeight, this.offsetX, this.offsetY);
     this.obstacleSystem = new ObstacleSystem(this);
     this.particles = new ParticleSystem(this);
+    this.powerUps = new PowerUpSystem(this, this.grid, this.obstacleSystem);
     this.lightSystem = new LightSystem(this.grid, () => this.obstacleSystem.getObstacleCells());
 
     this.grid.onCellCaptured = (wx, wy, ownerId) => {
@@ -143,6 +146,25 @@ export class GameScene extends Phaser.Scene {
     // Placement preview
     this.placementPreview = this.add.graphics();
     this.placementPreview.setDepth(10);
+
+    // PowerUp bomb callback
+    this.powerUps.onBomb = (cx, cy, playerId) => {
+      const destroyed = this.obstacleSystem.destroyInRadius(cx, cy, 3);
+      // Visual feedback — burst particles at each destroyed obstacle
+      if (destroyed > 0) {
+        for (let dy = -3; dy <= 3; dy++) {
+          for (let dx = -3; dx <= 3; dx++) {
+            if (Math.sqrt(dx * dx + dy * dy) > 3) continue;
+            const color = PLAYER_COLORS[playerId] || 0xff4444;
+            this.particles.queueCapture(
+              this.offsetX + (cx + dx + 0.5) * CELL_SIZE,
+              this.offsetY + (cy + dy + 0.5) * CELL_SIZE,
+              color,
+            );
+          }
+        }
+      }
+    };
 
     // Pointer
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
@@ -359,10 +381,44 @@ export class GameScene extends Phaser.Scene {
       const illuminatedMap = new Map<string, Set<string>>();
       const lightPositions = new Map<string, { cx: number; cy: number; radius: number }>();
 
+      // ── Apply power-up effects to players ──
+      const activeEffects = this.powerUps.update(delta, this.players, this.offsetX, this.offsetY);
+      const shieldedOwnerIds = new Set<string>();
+
+      // Reset modifiers, then apply from active effects
+      for (const p of this.players) {
+        p.setSpeedMult(1);
+        p.setRadiusBonus(0);
+        p.setShielded(false);
+      }
+
+      for (const effect of activeEffects) {
+        const player = this.players.find(p => p.id === effect.playerId);
+        if (!player) continue;
+
+        switch (effect.type) {
+          case 'speed':
+            player.setSpeedMult(1.8);
+            break;
+          case 'expand':
+            player.setRadiusBonus(Math.floor(this.config.lightRadius * 0.5));
+            break;
+          case 'shield':
+            player.setShielded(true);
+            shieldedOwnerIds.add(player.id);
+            break;
+          case 'steal':
+            // Directly claim enemy cells in range
+            this.executeSteal(player, this.offsetX, this.offsetY);
+            break;
+        }
+      }
+
       for (const p of this.players) {
         const pos = p.getGridPosition(this.offsetX, this.offsetY);
-        lightPositions.set(p.id, { cx: pos.cx, cy: pos.cy, radius: p.lightRadius });
-        this.lightSystem.computeIllumination(pos.cx, pos.cy, p.lightRadius, p.illuminatedCells);
+        const effectiveR = p.effectiveRadius;
+        lightPositions.set(p.id, { cx: pos.cx, cy: pos.cy, radius: effectiveR });
+        this.lightSystem.computeIllumination(pos.cx, pos.cy, effectiveR, p.illuminatedCells);
         illuminatedMap.set(p.id, p.illuminatedCells);
       }
 
@@ -381,7 +437,10 @@ export class GameScene extends Phaser.Scene {
       // Territory
       for (const p of this.players) {
         const pos = p.getGridPosition(this.offsetX, this.offsetY);
-        this.lightSystem.claimTerritory(p.id, pos.cx, pos.cy, p.lightRadius, p.illuminatedCells, contestedCells);
+        this.lightSystem.claimTerritory(
+          p.id, pos.cx, pos.cy, p.effectiveRadius,
+          p.illuminatedCells, contestedCells, shieldedOwnerIds,
+        );
       }
 
       this.obstacleSystem.setLightPositions(lightPositions);
@@ -409,8 +468,33 @@ export class GameScene extends Phaser.Scene {
     for (const p of this.players) p.renderGlow();
     this.obstacleSystem.render(this.offsetX, this.offsetY);
     this.particles.update(delta);
+    this.powerUps.renderPlayerEffects(this.players);
     this.hud.renderMinimap();
     this.renderPlacementPreview();
+  }
+
+  // ── Steal power-up: directly claim enemy cells in player's light ──
+
+  private executeSteal(player: PlayerLight, offsetX: number, offsetY: number): void {
+    const pos = player.getGridPosition(offsetX, offsetY);
+    const r = Math.ceil(player.effectiveRadius);
+    const gcx = Math.round(pos.cx);
+    const gcy = Math.round(pos.cy);
+
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        const cx = gcx + dx;
+        const cy = gcy + dy;
+        if (Math.sqrt(dx * dx + dy * dy) > player.effectiveRadius) continue;
+
+        const cell = this.grid.getCell(cx, cy);
+        if (!cell) continue;
+        if (cell.ownerId === player.id) continue;
+        if (cell.state === CELL_STATE.NEUTRAL) continue;
+        // Steal enemy territory
+        this.grid.directClaim(player.id, cx, cy);
+      }
+    }
   }
 
   private renderPlacementPreview(): void {

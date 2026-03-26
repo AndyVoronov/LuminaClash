@@ -176,6 +176,31 @@ export class ObstacleSystem {
     }
   }
 
+  /**
+   * Remove all obstacles within a radius (used by BOMB power-up).
+   */
+  destroyInRadius(cx: number, cy: number, radius: number): number {
+    let count = 0;
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        if (Math.sqrt(dx * dx + dy * dy) > radius) continue;
+        const key = `${cx + dx},${cy + dy}`;
+        if (this.obstacleCells.has(key)) {
+          // Find and remove the obstacle
+          for (const [id, obs] of this.obstacles) {
+            if (obs.cx === cx + dx && obs.cy === cy + dy) {
+              this.obstacles.delete(id);
+              break;
+            }
+          }
+          this.obstacleCells.delete(key);
+          count++;
+        }
+      }
+    }
+    return count;
+  }
+
   getObstacleCells(): Set<string> {
     return this.obstacleCells;
   }

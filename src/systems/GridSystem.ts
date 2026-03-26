@@ -288,6 +288,20 @@ export class GridSystem {
     this.glowGraphics.setBlendMode(Phaser.BlendModes.NORMAL);
   }
 
+  /**
+   * Directly claim a cell for a player (used by STEAL power-up — bypasses claiming time).
+   */
+  directClaim(playerId: string, cx: number, cy: number): void {
+    const cell = this.getCell(cx, cy);
+    if (!cell) return;
+    cell.ownerId = playerId;
+    cell.progress = 1;
+    cell.state = CELL_STATE.OWNED;
+    if (this.onCellCaptured) {
+      this.onCellCaptured(cx * CELL_SIZE + CELL_SIZE / 2, cy * CELL_SIZE + CELL_SIZE / 2, playerId);
+    }
+  }
+
   getStats(): Map<string, number> {
     const stats = new Map<string, number>();
     for (let y = 0; y < this.height; y++) {

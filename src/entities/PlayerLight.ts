@@ -32,6 +32,11 @@ export class PlayerLight {
   private pulsePhase: number;
   private label: Phaser.GameObjects.Text | null = null;
 
+  // Power-up modifiers
+  private speedMult: number = 1;
+  private radiusBonus: number = 0;
+  private shielded: boolean = false;
+
   illuminatedCells: Set<string> = new Set();
 
   obstacleBudget: number;
@@ -111,7 +116,7 @@ export class PlayerLight {
       this.moveY *= norm;
     }
 
-    let speed = this.lightSpeed * (delta / 1000);
+    let speed = this.lightSpeed * (delta / 1000) * this.speedMult;
 
     if (this.shiftKey) {
       this.sprinting = this.shiftKey.isDown && this.sprintEnergy > 0 && (this.moveX !== 0 || this.moveY !== 0);
@@ -212,6 +217,16 @@ export class PlayerLight {
   setMoveInput(x: number, y: number): void {
     this.moveX = x;
     this.moveY = y;
+  }
+
+  // ── Power-up modifiers ──
+
+  setSpeedMult(mult: number): void { this.speedMult = mult; }
+  setRadiusBonus(bonus: number): void { this.radiusBonus = bonus; }
+  setShielded(active: boolean): void { this.shielded = active; }
+
+  get effectiveRadius(): number {
+    return this.lightRadius + this.radiusBonus;
   }
 
   getSprintInfo(): { energy: number; max: number; active: boolean } | null {
