@@ -82,7 +82,7 @@
 - Визуал: floating orb, additive glow, pick-up анимация
 - Боты тоже могут подбирать power-ups (если бот проходит через ячейку)
 
-### S03: Map Generation `risk:medium` `depends:[M2/S01, S01]`
+### S03: Map Generation `risk:medium` `depends:[M2/S01, S01]` ✅ DONE
 - Процедурная генерация карт вместо хардкода:
   - Symmetric layouts (для fairness)
   - Preset templates: "Arena" (открытый), "Maze" (много стен), "Fortress" (tower-ы), "Chaos" (blinkers)
